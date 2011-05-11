@@ -91,12 +91,15 @@ def generate_chunk_files(path, feedback=False):
             yield StringIO(chunk)
 
 
-def upload_multipart(bucket, path, threads=0):
+def upload_multipart(bucket, path, threads=0, public=False):
     key = path
     sys.stderr.write('bucket=%s, key=%s\n' % (bucket, key))
     conn = boto.connect_s3()
     bucket = conn.lookup(bucket)
-    mupload = bucket.initiate_multipart_upload(key)
+    headers = None
+    if public:
+        headers = { 'x-amz-acl' : 'public-read' }
+    mupload = bucket.initiate_multipart_upload(key, headers=headers)
     if threads:
         if not thread_pool:
             raise RuntimeError("Twisted is required for threads - ain't that ironic?")
@@ -143,9 +146,11 @@ def main():
     parser.add_option('-b', '--bucket', dest='bucket', help='The bucket name')
     parser.add_option('-t', '--threads', dest='threads', type='int', default=0,
                       help='Number of threads to use')
+    parser.add_option('-p', '--public', dest='public', action='store_true',
+                      help='Use this flag to set acl to public-read')
     opts, args = parser.parse_args()
     path = args[0]
-    upload_multipart(opts.bucket, path, opts.threads)
+    upload_multipart(opts.bucket, path, opts.threads, opts.public)
 
 if __name__ == '__main__':
     main()
