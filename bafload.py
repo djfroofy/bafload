@@ -11,6 +11,7 @@ try:
     from twisted.internet import reactor
     from twisted.internet.defer import gatherResults
     from twisted.internet.threads import deferToThread
+    from twisted.internet.task import coiterate
     thread_pool = 1
 except ImportError:
     thread_pool = 0
@@ -126,10 +127,16 @@ def upload_multipart_parallel(bucket, path, mupload, threads):
         reactor.stop()
     gatherResults(deferreds).addErrback(log.err).addCallback(end)
 
-    for (piece, fd) in enumerate(generate_chunk_files(path), 1):
-        q.put((fd, piece))
-    for i in range(threads):
-        q.put(DONE)
+    def chunker():
+        for (piece, fd) in enumerate(generate_chunk_files(path), 1):
+            q.put((fd, piece))
+            yield
+        for i in range(threads):
+            q.put(DONE)
+            yield
+    chunker = chunker()
+    return coiterate(chunker).addCallback(
+        lambda ign: sys.stderr.write('\nfinished generating chunks for threads\n'))
 
 def main():
     parser = optparse.OptionParser()
