@@ -34,6 +34,9 @@ class FileIOPartsGenerator(ProgressLoggerMixin):
         part_number = 1
         part = read(size)
         while part:
+            # TODO - the part generated should optimally be an
+            # C{IBodyProducer} rather than reading 5MB of data
+            # for each part into memory
             yield (part_number, part)
             part_number += 1
             part = read(size)

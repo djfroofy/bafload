@@ -6,7 +6,7 @@ from twisted.python import log
 
 class ILog(Interface):
     """
-    Stub interface for logging components that follow
+    API for logging components that follow
     Twisted's log interface: msg() and err().
     """
 
