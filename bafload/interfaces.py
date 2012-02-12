@@ -63,7 +63,7 @@ class IPartHandler(IProgressLogger):
         """
 
 
-class IMultipartUploader(IProgressLogger):
+class IMultipartUploadsManager(IProgressLogger):
     """
     A component which manages S3 Multipart uploads
     """

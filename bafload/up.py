@@ -3,7 +3,7 @@ from zope.interface import implements
 from twisted.internet.defer import Deferred, gatherResults
 
 from bafload.interfaces import (ITransmissionCounter, IPartHandler,
-    IPartsGenerator, IMultipartUploader)
+    IPartsGenerator, IMultipartUploadsManager)
 from bafload.common import BaseCounter, ProgressLoggerMixin
 
 
@@ -69,8 +69,8 @@ class MultipartUpload(ProgressLoggerMixin):
         return '%s upload_id=%s' % (cname, self.upload_id)
 
 
-class MultipartUploader(ProgressLoggerMixin):
-    implements(IMultipartUploader)
+class MultipartUploadsManager(ProgressLoggerMixin):
+    implements(IMultipartUploadsManager)
 
     def __init__(self, counter_factory=None, log=None):
         if counter_factory is None:

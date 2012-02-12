@@ -5,9 +5,9 @@ from zope.interface.verify import verifyClass, verifyObject
 from twisted.trial.unittest import TestCase
 
 from bafload.interfaces import (IPartsGenerator, ITransmissionCounter,
-    IPartHandler, IMultipartUploader)
+    IPartHandler, IMultipartUploadsManager)
 from bafload.up import (FileIOPartsGenerator, PartsTransferredCounter,
-    SingleProcessPartUploader, MultipartUploader, MultipartUpload)
+    SingleProcessPartUploader, MultipartUploadsManager, MultipartUpload)
 from bafload.test.util import FakeLog
 from bafload import up as up_module
 
@@ -29,9 +29,9 @@ class InterfacesTestCase(TestCase):
         verifyObject(IPartHandler, uploader)
 
     def test_multipart_upload_ifaces(self):
-        verifyClass(IMultipartUploader, MultipartUploader)
-        mp_uploader = MultipartUploader()
-        verifyObject(IMultipartUploader, mp_uploader)
+        verifyClass(IMultipartUploadsManager, MultipartUploadsManager)
+        mp_uploader = MultipartUploadsManager()
+        verifyObject(IMultipartUploadsManager, mp_uploader)
 
 
 class TestMultipartUpload(MultipartUpload):
@@ -42,6 +42,7 @@ class TestMultipartUpload(MultipartUpload):
         self.metadata = metadata
         self.finished.callback(self)
 
+
 class MultipastUploadTestCase(TestCase):
 
     def test_str(self):
@@ -50,12 +51,10 @@ class MultipastUploadTestCase(TestCase):
         self.assertEqual(str(upload), "MultipartUpload upload_id=1234567890")
 
 
-from pprint import pprint
-
-class MultipartUploaderTestCase(TestCase):
+class MultipartUploadsManagerTestCase(TestCase):
 
     def setUp(self):
-        super(MultipartUploaderTestCase, self).setUp()
+        super(MultipartUploadsManagerTestCase, self).setUp()
         self.log = FakeLog()
 
     def test_upload_creation(self):
@@ -70,7 +69,7 @@ class MultipartUploaderTestCase(TestCase):
             self.assert_(self.log.buffer)
             for entry in self.log.buffer:
                 self.assertEqual(entry[0], 'msg')
-        manager = MultipartUploader(log=self.log)
+        manager = MultipartUploadsManager(log=self.log)
         fd = StringIO("some data")
         d = manager.upload(fd, 'mybucket', 'mykey')
         d.addCallback(check)
