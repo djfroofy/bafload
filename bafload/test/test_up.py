@@ -1,11 +1,16 @@
 from StringIO import StringIO
+from hashlib import md5
 
 from zope.interface.verify import verifyClass, verifyObject
+from zope.interface import implements
 
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, succeed
+from twisted.python import log
 from twisted.trial.unittest import TestCase
 
 from txaws.s3.client import S3Client
+from txaws.s3.model import (MultipartInitiationResponse,
+    MultipartCompletionResponse)
 from txaws.service import AWSServiceRegion
 from txaws.credentials import AWSCredentials
 
@@ -13,7 +18,7 @@ from bafload.interfaces import (IPartsGenerator, ITransmissionCounter,
     IPartHandler, IMultipartUploadsManager)
 from bafload.up import (FileIOPartsGenerator, PartsTransferredCounter,
     SingleProcessPartUploader, MultipartUploadsManager, MultipartUpload)
-from bafload.test.util import FakeLog
+from bafload.test.util import FakeLog, FakeS3Client
 from bafload import up as up_module
 
 class InterfacesTestCase(TestCase):
@@ -48,13 +53,69 @@ class TestMultipartUpload(MultipartUpload):
         self.finished.callback(self)
 
 
-class MultipastUploadTestCase(TestCase):
+class DummyPartsGenerator(object):
+    implements(IPartsGenerator)
+
+    def __init__(self):
+        self.generated = []
+
+    def generate_parts(self, fd):
+        for i in range(10):
+            entity = (chr(ord('a') + i) * 10, i+1)
+            self.generated.append(entity)
+            yield entity
+
+class DummyPartHandler(object):
+
+    def __init__(self):
+        self.handled = []
+
+    def handle_part(self, bytes, seq_no):
+        self.handled.append((bytes, seq_no))
+        etag = md5(bytes).hexdigest()
+        return succeed((etag, seq_no))
+
+
+class MultipartUploadTestCase(TestCase):
+
+    def setUp(self):
+        super(MultipartUploadTestCase, self).setUp()
+        self.log = FakeLog()
 
     def test_str(self):
         upload = MultipartUpload(None, None, None, None, None, Deferred())
-        upload.upload_id = "1234567890"
+        r = MultipartInitiationResponse('', '', '1234567890')
+        upload.init_response = r
         self.assertEqual(str(upload), "MultipartUpload upload_id=1234567890")
 
+    def test_upload(self):
+        client = FakeS3Client()
+        parts_generator = DummyPartsGenerator()
+        part_handler = DummyPartHandler()
+        d = Deferred()
+        upload = MultipartUpload(client, None, parts_generator, part_handler,
+            None, d, self.log)
+        def check(task):
+            self.assertIdentical(task, upload)
+            expected = [('aaaaaaaaaa', 1),
+                        ('bbbbbbbbbb', 2),
+                        ('cccccccccc', 3),
+                        ('dddddddddd', 4),
+                        ('eeeeeeeeee', 5),
+                        ('ffffffffff', 6),
+                        ('gggggggggg', 7),
+                        ('hhhhhhhhhh', 8),
+                        ('iiiiiiiiii', 9),
+                        ('jjjjjjjjjj', 10)]
+            self.assertEqual(parts_generator.generated, expected)
+            self.assertEqual(part_handler.handled, expected)
+            self.assertIsInstance(task.init_response,
+                MultipartInitiationResponse)
+            self.assertIsInstance(task.completion_response,
+                MultipartCompletionResponse)
+        d.addCallback(check)
+        upload.upload('mybucket', 'mykey', '', {})
+        return d.addErrback(log.err)
 
 class MultipartUploadsManagerTestCase(TestCase):
 

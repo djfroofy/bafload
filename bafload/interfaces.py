@@ -34,7 +34,8 @@ class IProgressLogger(Interface):
 class ITransmissionCounter(IProgressLogger):
 
     completed = Attribute("Number of parts/chunks transfered (starts at 0)")
-    receiving = Attribute("If True, we're receiving data, otherwise we're sending")
+    receiving = Attribute("If True, we're receiving data, otherwise we're "
+                          "sending")
 
     def increment_count():
         """
@@ -42,21 +43,33 @@ class ITransmissionCounter(IProgressLogger):
         """
 
 class IPartsGenerator(IProgressLogger):
+    """
+    A Parts generates generates bytes and sequence numbers for
+    each range of bytes.
+    """
 
     def generate_parts(fd):
         """
         This method should generate or return iternable for parts from
-        a file-like object.
+        a file-like object. Each item generated should be a 2-tuple:
+        (bytes, seq_no)
 
         @param fd: file-like object to read parts from
         """
 
 class IPartHandler(IProgressLogger):
+    """
+    Part Handler receives bytes and sequences number and uploads
+    or dispatches to another uploader component.
+    """
+
+    bucket = Attribute("S3 Bucket name")
+    object_name = Attribute("S3 Key")
 
     def handle_part(bytes, seq_no):
         """
         Handle a part, uploading to s3 or dispatching to process to
-        do upload etc.
+        do upload etc. This should fire with a 2-tuple (etag, seq_no)
 
         @param bytes: The raw bytes as C{str} to handle
         @param seq_no: The sequence number for the part

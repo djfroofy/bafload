@@ -2,7 +2,8 @@ import os
 
 from zope.interface import implements
 
-from twisted.internet.defer import Deferred, gatherResults
+from twisted.internet.defer import Deferred, DeferredList
+from twisted.internet.task import coiterate
 
 from txaws.credentials import AWSCredentials
 from txaws.service import AWSServiceRegion
@@ -27,6 +28,9 @@ class FileIOPartsGenerator(ProgressLoggerMixin):
 class SingleProcessPartUploader(ProgressLoggerMixin):
     implements(IPartHandler)
 
+    bucket = None
+    object_name = None
+
     def handle_part(self, bytes, seq_no):
         # FIXME
         pass
@@ -41,7 +45,8 @@ class MultipartTaskCompletion(object):
 
 class MultipartUpload(ProgressLoggerMixin):
 
-    upload_id = None
+    init_response = None
+    completion_response = None
 
     def __init__(self, client, fd, parts_generator, part_handler, counter,
                  finished, log=None):
@@ -54,24 +59,51 @@ class MultipartUpload(ProgressLoggerMixin):
         self.set_log(log)
 
     def upload(self, bucket, object_name, content_type, metadata):
-#        work = []
-#        for (bytes, seq_no) in self.parts_generator.generate_parts():
-#            d = self.part_handler.handle_part(bytes, seq_no)
-#            work.append(d)
-#            yield
-#        gatherResults(work).addCallback(self._finalize)
-        # FIXME
-        self.finished.callback(self)
+        self.part_handler.bucket = bucket
+        self.part_handler.object_name = object_name
+        d = self.client.init_multipart_upload(bucket, object_name,
+            content_type, metadata)
+        return d.addCallback(self._initialized)
 
-# FIXME
-#    def _finalize(self):
-#        d = self.finished
-#        self.finished = None
-#        d.callback(self)
+    def _initialized(self, response):
+        self.init_response = response
+        return coiterate(self._generate_parts(
+            self.parts_generator.generate_parts(self.fd)))
+
+    def _generate_parts(self, gen):
+        work = []
+        self.parts_list = []
+        for (bytes, seq_no) in gen:
+            d = self.part_handler.handle_part(bytes, seq_no)
+            work.append(d)
+            yield
+        d = DeferredList(work)
+        d.addCallback(self._parts_uploaded)
+
+    def _parts_uploaded(self, result):
+        # TODO - handle errors here. possible create a new generator
+        # to pass back to generate parts and try again X times for
+        # failed parts?
+        parts_list = [ r[1] for r in  result ]
+        bucket = self.part_handler.bucket
+        object_name = self.part_handler.object_name
+        upload_id = self.init_response.upload_id
+        d = self.client.complete_multipart_upload(bucket, object_name,
+            upload_id, parts_list)
+        d.addCallback(self._completed)
+
+    def _completed(self, completion_response):
+        self.completion_response = completion_response
+        d = self.finished
+        self.finished = None
+        d.callback(self)
 
     def __str__(self):
         cname = self.__class__.__name__
-        return '%s upload_id=%s' % (cname, self.upload_id)
+        upid = None
+        if self.init_response is not None:
+            upid = self.init_response.upload_id
+        return '%s upload_id=%s' % (cname, upid)
 
 
 class MultipartUploadsManager(ProgressLoggerMixin):
