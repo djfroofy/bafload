@@ -89,10 +89,10 @@ class DummyPartHandler(object):
     def __init__(self):
         self.handled = []
 
-    def handle_part(self, bytes, seq_no):
-        self.handled.append((bytes, seq_no))
-        etag = md5(bytes).hexdigest()
-        return succeed((etag, seq_no))
+    def handle_part(self, part, part_number):
+        self.handled.append((part, part_number))
+        etag = md5(part).hexdigest()
+        return succeed((etag, part_number))
 
 
 class SingleProcessPartUploaderTestCase(TestCase):

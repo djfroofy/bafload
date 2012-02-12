@@ -1,3 +1,4 @@
+# Copryright 2012 Drew Smathers, See LICENSE
 import os
 
 from zope.interface import implements
@@ -46,16 +47,16 @@ class SingleProcessPartUploader(ProgressLoggerMixin):
     upload_id = None
     client = None
 
-    # TODO - change seq_no to part_number for consistency
+    # TODO - change part_number to part_number for consistency
     # here and everywhere else
-    def handle_part(self, bytes, seq_no):
+    def handle_part(self, part, part_number):
         d = self.client.upload_part(self.bucket, self.object_name,
-            self.upload_id, seq_no, bytes)
-        d.addCallback(self._handle_headers, seq_no)
+            self.upload_id, part_number, part)
+        d.addCallback(self._handle_headers, part_number)
         return d
 
-    def _handle_headers(self, headers, seq_no):
-        return (headers['ETag'], seq_no)
+    def _handle_headers(self, headers, part_number):
+        return (headers['ETag'], part_number)
 
 
 class MultipartTaskCompletion(object):
@@ -95,8 +96,8 @@ class MultipartUpload(ProgressLoggerMixin):
     def _generate_parts(self, gen):
         work = []
         self.parts_list = []
-        for (bytes, seq_no) in gen:
-            d = self.part_handler.handle_part(bytes, seq_no)
+        for (part, part_number) in gen:
+            d = self.part_handler.handle_part(part, part_number)
             work.append(d)
             yield
         d = DeferredList(work)
