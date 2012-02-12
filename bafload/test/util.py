@@ -7,6 +7,7 @@ from txaws.s3.model import (MultipartInitiationResponse,
 
 from bafload.interfaces import ILog
 
+
 class FakeLog(object):
     implements(ILog)
 
@@ -26,10 +27,15 @@ class FakeS3Client(object):
                               metadata):
         return succeed(MultipartInitiationResponse(bucket, object_name, '1234'))
 
+    def upload_part(self, bucket, object_name, upload_id, part_number,
+                    data=None, content_type=None, metadata={},
+                    body_producer=None):
+        return succeed({'ETag': '"0123456789"'})
+
     def complete_multipart_upload(self, bucket, object_name, upload_id,
                                   parts_list):
         return succeed(MultipartCompletionResponse(
             'http://%s.example.com/%s' % (bucket, object_name),
-            bucket, object_name, '1234567890'))
+            bucket, object_name, '"0123456789"'))
 
 

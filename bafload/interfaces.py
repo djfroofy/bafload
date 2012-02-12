@@ -65,6 +65,7 @@ class IPartHandler(IProgressLogger):
 
     bucket = Attribute("S3 Bucket name")
     object_name = Attribute("S3 Key")
+    upload_id = Attribute("The multipart upload id")
 
     def handle_part(bytes, seq_no):
         """

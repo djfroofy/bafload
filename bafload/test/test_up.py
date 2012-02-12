@@ -65,6 +65,7 @@ class DummyPartsGenerator(object):
             self.generated.append(entity)
             yield entity
 
+
 class DummyPartHandler(object):
 
     def __init__(self):
@@ -75,6 +76,21 @@ class DummyPartHandler(object):
         etag = md5(bytes).hexdigest()
         return succeed((etag, seq_no))
 
+
+class SingleProcessPartUploaderTestCase(TestCase):
+
+    def test_handle_part(self):
+        client = FakeS3Client()
+        handler = SingleProcessPartUploader()
+        handler.bucket = "mybucket"
+        handler.object_name = "mykey"
+        handler.upload_id = "theupload"
+        handler.client = client
+        def check(result):
+            self.assertEqual(result, ('"0123456789"', 1))
+        d = handler.handle_part("aaaaaaaaaa", 1)
+        d.addCallback(check)
+        return d
 
 class MultipartUploadTestCase(TestCase):
 

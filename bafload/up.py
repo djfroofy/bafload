@@ -30,10 +30,19 @@ class SingleProcessPartUploader(ProgressLoggerMixin):
 
     bucket = None
     object_name = None
+    upload_id = None
+    client = None
 
+    # TODO - change seq_no to part_number for consistency
+    # here and everywhere else
     def handle_part(self, bytes, seq_no):
-        # FIXME
-        pass
+        d = self.client.upload_part(self.bucket, self.object_name,
+            self.upload_id, seq_no, bytes)
+        d.addCallback(self._handle_headers, seq_no)
+        return d
+
+    def _handle_headers(self, headers, seq_no):
+        return (headers['ETag'], seq_no)
 
 
 class MultipartTaskCompletion(object):
@@ -142,6 +151,7 @@ class MultipartUploadsManager(ProgressLoggerMixin):
             parts_generator = FileIOPartsGenerator()
         if part_handler is None:
             part_handler = SingleProcessPartUploader()
+        part_handler.client = client
         d = Deferred()
         task = MultipartUpload(client, fd, parts_generator, part_handler,
                                counter, d, self.log)
