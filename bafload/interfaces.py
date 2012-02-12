@@ -26,9 +26,6 @@ directlyProvides(log, ILog)
 
 class IProgressLogger(Interface):
 
-    log_process = Attribute("Flag when set when set will enable logging of "
-                            "progress on component")
-
     def set_log(log):
         """
         Set logging component or provider of L{ILog}.

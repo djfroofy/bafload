@@ -1,3 +1,5 @@
+from StringIO import StringIO
+
 from zope.interface.verify import verifyClass, verifyObject
 
 from twisted.trial.unittest import TestCase
@@ -5,7 +7,9 @@ from twisted.trial.unittest import TestCase
 from bafload.interfaces import (IPartsGenerator, ITransmissionCounter,
     IPartHandler, IMultipartUploader)
 from bafload.up import (FileIOPartsGenerator, PartsTransferredCounter,
-    SingleProcessPartUploader, MultipartUploader)
+    SingleProcessPartUploader, MultipartUploader, MultipartUpload)
+from bafload.test.util import FakeLog
+from bafload import up as up_module
 
 class InterfacesTestCase(TestCase):
 
@@ -29,3 +33,45 @@ class InterfacesTestCase(TestCase):
         mp_uploader = MultipartUploader()
         verifyObject(IMultipartUploader, mp_uploader)
 
+
+class TestMultipartUpload(MultipartUpload):
+
+    def upload(self, bucket, object_name, content_type, metadata):
+        self.bucket = bucket
+        self.object_name = object_name
+        self.metadata = metadata
+        self.finished.callback(self)
+
+class MultipastUploadTestCase(TestCase):
+
+    def test_str(self):
+        upload = MultipartUpload(None, None, None, None, None)
+        upload.upload_id = "1234567890"
+        self.assertEqual(str(upload), "MultipartUpload upload_id=1234567890")
+
+
+from pprint import pprint
+
+class MultipartUploaderTestCase(TestCase):
+
+    def setUp(self):
+        super(MultipartUploaderTestCase, self).setUp()
+        self.log = FakeLog()
+
+    def test_upload_creation(self):
+        self.patch(up_module, 'MultipartUpload', TestMultipartUpload)
+        def check(task):
+            self.assertIsInstance(task, MultipartUpload)
+            self.assertEqual(task.bucket, "mybucket")
+            self.assertEqual(task.object_name, "mykey")
+            self.assertIdentical(task.fd, fd)
+            self.assertEqual(task.metadata, {})
+            self.assertIsInstance(task.counter, PartsTransferredCounter)
+            self.assert_(self.log.buffer)
+            for entry in self.log.buffer:
+                self.assertEqual(entry[0], 'msg')
+        manager = MultipartUploader(log=self.log)
+        fd = StringIO("some data")
+        d = manager.upload(fd, 'mybucket', 'mykey')
+        d.addCallback(check)
+        return d

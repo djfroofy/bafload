@@ -1,10 +1,10 @@
-from zope.interface import implements
 from zope.interface.verify import verifyClass, verifyObject
 
 from twisted.trial.unittest import TestCase
 
-from bafload.interfaces import ITransmissionCounter, ILog
+from bafload.interfaces import ITransmissionCounter
 from bafload.common import BaseCounter
+from bafload.test.util import FakeLog
 
 class InterfacesTestCase(TestCase):
 
@@ -12,19 +12,6 @@ class InterfacesTestCase(TestCase):
         verifyClass(ITransmissionCounter, BaseCounter)
         counter = BaseCounter(365)
         verifyObject(ITransmissionCounter, counter)
-
-
-class FakeLog(object):
-    implements(ILog)
-
-    def __init__(self):
-        self.buffer = []
-
-    def msg(self, *message, **kw):
-        self.buffer.append(('msg', message, kw))
-
-    def err(self, stuff, why, **kw):
-        self.buffer.append(('err', stuff, why, kw))
 
 
 class CounterTestCase(TestCase):

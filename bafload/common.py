@@ -5,7 +5,6 @@ from twisted.python import log as twisted_log
 from bafload.interfaces import ITransmissionCounter, ILog
 
 class ProgressLoggerMixin(object):
-    log_process = True
     log = twisted_log
 
     def set_log(self, log=None):
@@ -29,8 +28,7 @@ class BaseCounter(ProgressLoggerMixin):
         self.completed += 1
         verb = ('transferred', 'received')[self.receiving]
         cr = ('', '\r')[self.format_for_stdout]
-        if self.log_process:
-            self.log.msg('%-40s %s' % ('%s parts %d/%d' % (verb, self.completed,
-                self.expected), cr))
+        self.log.msg('%-40s %s' % ('%s parts %d/%d' % (verb, self.completed,
+            self.expected), cr))
 
 
