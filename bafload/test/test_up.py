@@ -21,6 +21,7 @@ from bafload.up import (FileIOPartsGenerator, PartsTransferredCounter,
 from bafload.test.util import FakeLog, FakeS3Client
 from bafload import up as up_module
 
+
 class InterfacesTestCase(TestCase):
 
     def test_file_io_parts_generator_ifaces(self):

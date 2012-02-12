@@ -47,8 +47,6 @@ class SingleProcessPartUploader(ProgressLoggerMixin):
     upload_id = None
     client = None
 
-    # TODO - change part_number to part_number for consistency
-    # here and everywhere else
     def handle_part(self, part, part_number):
         d = self.client.upload_part(self.bucket, self.object_name,
             self.upload_id, part_number, part)
@@ -131,6 +129,9 @@ class MultipartUpload(ProgressLoggerMixin):
 
 class MultipartUploadsManager(ProgressLoggerMixin):
     """
+    The L{MultipartUploadsManager} is the primary interface for optionally
+    queuing and performing multipart uploads for files/data.
+
     @param creds: L{txaws.credentials.AWSCredentials} object or if None this
         will be contruscted based on environment variables AWS_ACCESS_KEY_ID
         and AWS_SECRET_ACCESS_KEY.
