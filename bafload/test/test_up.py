@@ -2,7 +2,12 @@ from StringIO import StringIO
 
 from zope.interface.verify import verifyClass, verifyObject
 
+from twisted.internet.defer import Deferred
 from twisted.trial.unittest import TestCase
+
+from txaws.s3.client import S3Client
+from txaws.service import AWSServiceRegion
+from txaws.credentials import AWSCredentials
 
 from bafload.interfaces import (IPartsGenerator, ITransmissionCounter,
     IPartHandler, IMultipartUploadsManager)
@@ -46,7 +51,7 @@ class TestMultipartUpload(MultipartUpload):
 class MultipastUploadTestCase(TestCase):
 
     def test_str(self):
-        upload = MultipartUpload(None, None, None, None, None)
+        upload = MultipartUpload(None, None, None, None, None, Deferred())
         upload.upload_id = "1234567890"
         self.assertEqual(str(upload), "MultipartUpload upload_id=1234567890")
 
@@ -56,9 +61,19 @@ class MultipartUploadsManagerTestCase(TestCase):
     def setUp(self):
         super(MultipartUploadsManagerTestCase, self).setUp()
         self.log = FakeLog()
+        self.patch(up_module, 'MultipartUpload', TestMultipartUpload)
+
+    def test_region(self):
+        region = AWSServiceRegion()
+        manager = MultipartUploadsManager(region=region)
+        self.assertIdentical(manager.region, region)
+
+    def test_creds(self):
+        creds = AWSCredentials()
+        manager = MultipartUploadsManager(creds=creds)
+        self.assertIdentical(manager.region.creds, creds)
 
     def test_upload_creation(self):
-        self.patch(up_module, 'MultipartUpload', TestMultipartUpload)
         def check(task):
             self.assertIsInstance(task, MultipartUpload)
             self.assertEqual(task.bucket, "mybucket")
@@ -66,7 +81,10 @@ class MultipartUploadsManagerTestCase(TestCase):
             self.assertIdentical(task.fd, fd)
             self.assertEqual(task.metadata, {})
             self.assertIsInstance(task.counter, PartsTransferredCounter)
+            self.assertIsInstance(task.client, S3Client)
             self.assert_(self.log.buffer)
+            verifyObject(IPartsGenerator, task.parts_generator)
+            verifyObject(IPartHandler, task.part_handler)
             for entry in self.log.buffer:
                 self.assertEqual(entry[0], 'msg')
         manager = MultipartUploadsManager(log=self.log)

@@ -1,6 +1,11 @@
+import os
+
 from zope.interface import implements
 
 from twisted.internet.defer import Deferred, gatherResults
+
+from txaws.credentials import AWSCredentials
+from txaws.service import AWSServiceRegion
 
 from bafload.interfaces import (ITransmissionCounter, IPartHandler,
     IPartsGenerator, IMultipartUploadsManager)
@@ -39,13 +44,13 @@ class MultipartUpload(ProgressLoggerMixin):
     upload_id = None
 
     def __init__(self, client, fd, parts_generator, part_handler, counter,
-                 log=None):
+                 finished, log=None):
         self.client = client
         self.fd = fd
         self.parts_generator = parts_generator
         self.part_handler = part_handler
         self.counter = counter
-        self.finished = Deferred()
+        self.finished = finished
         self.set_log(log)
 
     def upload(self, bucket, object_name, content_type, metadata):
@@ -70,11 +75,23 @@ class MultipartUpload(ProgressLoggerMixin):
 
 
 class MultipartUploadsManager(ProgressLoggerMixin):
+    """
+    @param creds: L{txaws.credentials.AWSCredentials} object or if None this
+        will be contruscted based on environment variables AWS_ACCESS_KEY_ID
+        and AWS_SECRET_ACCESS_KEY.
+    @param counter_factory: A callable that takes no args and returns an
+        L{ITransmissionCounter} provider. If None, the default class
+        L{PartsTransferredCounter} will be used.
+    @param log: An L{ILog} provider. default: L{twisted.python.log}
+    """
     implements(IMultipartUploadsManager)
 
-    def __init__(self, counter_factory=None, log=None):
+    def __init__(self, creds=None, counter_factory=None, log=None, region=None):
         if counter_factory is None:
             counter_factory = PartsTransferredCounter
+        if region is None:
+            region = AWSServiceRegion(creds=creds)
+        self.region = region
         self.counter_factory = counter_factory
         self.set_log(log)
         self.uploads = set()
@@ -83,18 +100,20 @@ class MultipartUploadsManager(ProgressLoggerMixin):
                metadata={}, parts_generator=None, part_handler=None):
         self.log.msg('Beginning upload to bucket=%s,key=%s' % (
                      bucket, object_name))
+        client = self.region.get_s3_client()
         # TODO - probably need some pluggable strategy for getting the parts
         # count (if desired) or not (optimization) - maybe parts_count()
-        # method on IPartsGenerator
+        # method on IPartsGenerator.
+        # Or maybe this whole counter idea is just plain wrong.
         counter = self.counter_factory('?')
-        # FIXME will need to get actual client ... etc. etc.
-        client = None
-        parts_gen = None
-        part_hdlr = None
-        task = MultipartUpload(client, fd, parts_gen, part_hdlr, counter,
-                               log=self.log)
+        if parts_generator is None:
+            parts_generator = FileIOPartsGenerator()
+        if part_handler is None:
+            part_handler = SingleProcessPartUploader()
+        d = Deferred()
+        task = MultipartUpload(client, fd, parts_generator, part_handler,
+                               counter, d, self.log)
         self.uploads.add(task)
-        d = task.finished
         d.addCallbacks(self._completed_upload, self.log.err)\
             .addBoth(self._remove_upload, task)
         task.upload(bucket, object_name, content_type, metadata)
