@@ -13,6 +13,9 @@ from bafload.interfaces import (ITransmissionCounter, IPartHandler,
 from bafload.common import BaseCounter, ProgressLoggerMixin
 
 
+DEFAULT_PART_SIZE = 0x500000
+
+
 class PartsTransferredCounter(BaseCounter):
     receiving = False
 
@@ -20,9 +23,19 @@ class PartsTransferredCounter(BaseCounter):
 class FileIOPartsGenerator(ProgressLoggerMixin):
     implements(IPartsGenerator)
 
+    part_size = DEFAULT_PART_SIZE
+
     def generate_parts(self, fd):
-        # FIXME
-        return iter([])
+        seek = fd.seek
+        read = fd.read
+        size = self.part_size
+        seek(0)
+        part_number = 1
+        part = read(size)
+        while part:
+            yield (part_number, part)
+            part_number += 1
+            part = read(size)
 
 
 class SingleProcessPartUploader(ProgressLoggerMixin):

@@ -53,6 +53,24 @@ class TestMultipartUpload(MultipartUpload):
         self.finished.callback(self)
 
 
+class FileIOPartsGeneratorTestCase(TestCase):
+
+    def setUp(self):
+        super(FileIOPartsGeneratorTestCase, self).setUp()
+        self.generator = FileIOPartsGenerator()
+        self.generator.part_size = 10
+
+    def test_generate_parts(self):
+        fd = StringIO("x" * 5 + "y" * 10 + "z" * 13)
+        generated = [ entity for entity in self.generator.generate_parts(fd) ]
+        self.assertEqual(generated, [(1, 'xxxxxyyyyy'),
+                                     (2, 'yyyyyzzzzz'),
+                                     (3, 'zzzzzzzz')])
+
+    def test_default_part_size(self):
+        self.assertEqual(FileIOPartsGenerator.part_size, 5 * 1024 * 1024)
+
+
 class DummyPartsGenerator(object):
     implements(IPartsGenerator)
 
