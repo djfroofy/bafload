@@ -64,9 +64,9 @@ class FileIOPartsGeneratorTestCase(TestCase):
     def test_generate_parts(self):
         fd = StringIO("x" * 5 + "y" * 10 + "z" * 13)
         generated = [ entity for entity in self.generator.generate_parts(fd) ]
-        self.assertEqual(generated, [(1, 'xxxxxyyyyy'),
-                                     (2, 'yyyyyzzzzz'),
-                                     (3, 'zzzzzzzz')])
+        self.assertEqual(generated, [('xxxxxyyyyy', 1),
+                                     ('yyyyyzzzzz', 2),
+                                     ('zzzzzzzz', 3)])
 
     def test_default_part_size(self):
         self.assertEqual(FileIOPartsGenerator.part_size, 5 * 1024 * 1024)
@@ -106,7 +106,7 @@ class SingleProcessPartUploaderTestCase(TestCase):
         handler.upload_id = "theupload"
         handler.client = client
         def check(result):
-            self.assertEqual(result, ('"0123456789"', 1))
+            self.assertEqual(result, (1, '"0123456789"'))
         d = handler.handle_part("aaaaaaaaaa", 1)
         d.addCallback(check)
         return d
@@ -127,9 +127,10 @@ class MultipartUploadTestCase(TestCase):
         client = FakeS3Client()
         parts_generator = DummyPartsGenerator()
         part_handler = DummyPartHandler()
+        counter = PartsTransferredCounter('?')
         d = Deferred()
         upload = MultipartUpload(client, None, parts_generator, part_handler,
-            None, d, self.log)
+            counter, d, self.log)
         def check(task):
             self.assertIdentical(task, upload)
             expected = [('aaaaaaaaaa', 1),

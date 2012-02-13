@@ -37,7 +37,7 @@ class FileIOPartsGenerator(ProgressLoggerMixin):
             # TODO - the part generated should optimally be an
             # C{IBodyProducer} rather than reading 5MB of data
             # for each part into memory
-            yield (part_number, part)
+            yield (part, part_number)
             part_number += 1
             part = read(size)
 
@@ -57,7 +57,7 @@ class SingleProcessPartUploader(ProgressLoggerMixin):
         return d
 
     def _handle_headers(self, headers, part_number):
-        return (headers['ETag'], part_number)
+        return (part_number, headers['ETag'])
 
 
 class MultipartTaskCompletion(object):
@@ -90,15 +90,19 @@ class MultipartUpload(ProgressLoggerMixin):
         return d.addCallback(self._initialized)
 
     def _initialized(self, response):
+        self.part_handler.upload_id = response.upload_id
         self.init_response = response
         return coiterate(self._generate_parts(
             self.parts_generator.generate_parts(self.fd)))
 
     def _generate_parts(self, gen):
+        def count(result):
+            self.counter.increment_count()
+            return result
         work = []
-        self.parts_list = []
         for (part, part_number) in gen:
             d = self.part_handler.handle_part(part, part_number)
+            d.addCallback(count)
             work.append(d)
             yield
         d = DeferredList(work)

@@ -28,7 +28,7 @@ class BaseCounter(ProgressLoggerMixin):
         self.completed += 1
         verb = ('transferred', 'received')[self.receiving]
         cr = ('', '\r')[self.format_for_stdout]
-        self.log.msg('%-40s %s' % ('%s parts %d/%d' % (verb, self.completed,
+        self.log.msg('%-40s %s' % ('%s parts %d/%s' % (verb, self.completed,
             self.expected), cr))
 
 
