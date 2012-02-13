@@ -169,6 +169,7 @@ class MultipartUploadsManager(ProgressLoggerMixin):
         # method on IPartsGenerator.
         # Or maybe this whole counter idea is just plain wrong.
         counter = self.counter_factory('?')
+        counter.context = '[%s] ' % object_name
         if parts_generator is None:
             parts_generator = FileIOPartsGenerator()
         if part_handler is None:
