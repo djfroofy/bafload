@@ -71,6 +71,26 @@ class FileIOPartsGeneratorTestCase(TestCase):
     def test_default_part_size(self):
         self.assertEqual(FileIOPartsGenerator.part_size, 5 * 1024 * 1024)
 
+    def test_count_parts_for_stringio_type(self):
+        fd = StringIO("x" * 53)
+        count = self.generator.count_parts(fd)
+        self.assertEqual(count, 6)
+        fd = StringIO("x" * 30)
+        count = self.generator.count_parts(fd)
+        self.assertEqual(count, 3)
+
+    def test_count_parts_for_file_type(self):
+        path = self.mktemp()
+        with open(path, "w") as fd:
+            fd.write("x" * 53)
+        fd = open(path)
+        count = self.generator.count_parts(fd)
+        self.assertEqual(count, 6)
+
+    def test_count_parts_for_other_type(self):
+        count = self.generator.count_parts([])
+        self.assertEqual(count, "?")
+
 
 class DummyPartsGenerator(object):
     implements(IPartsGenerator)

@@ -1,5 +1,6 @@
 # Copryright 2012 Drew Smathers, See LICENSE
 import os
+import types
 
 from zope.interface import implements
 
@@ -40,6 +41,20 @@ class FileIOPartsGenerator(ProgressLoggerMixin):
             yield (part, part_number)
             part_number += 1
             part = read(size)
+
+    def count_parts(self, fd):
+        # XXX - maybe some stub interfaces and adaptors instead
+        # of this messy type checking
+        if isinstance(fd, types.FileType):
+            size = os.fstat(fd.fileno()).st_size
+        elif hasattr(fd, 'len'):
+            size = fd.len
+        else:
+            return '?'
+        count = size / self.part_size
+        if size % self.part_size:
+            return count + 1
+        return count
 
 
 class SingleProcessPartUploader(ProgressLoggerMixin):
@@ -131,8 +146,11 @@ class MultipartUpload(ProgressLoggerMixin):
         upid = None
         if self.init_response is not None:
             upid = self.init_response.upload_id
-        return '%s upload_id=%s' % (cname, upid)
-
+        s = '%s upload_id=%s' % (cname, upid)
+        if self.part_handler:
+            s += ', bucket=%s, object_name=%s' % (
+                self.part_handler.bucket, self.part_handler.object_name)
+        return s
 
 class MultipartUploadsManager(ProgressLoggerMixin):
     """
@@ -164,16 +182,16 @@ class MultipartUploadsManager(ProgressLoggerMixin):
         self.log.msg('Beginning upload to bucket=%s,key=%s' % (
                      bucket, object_name))
         client = self.region.get_s3_client()
-        # TODO - probably need some pluggable strategy for getting the parts
-        # count (if desired) or not (optimization) - maybe parts_count()
-        # method on IPartsGenerator.
-        # Or maybe this whole counter idea is just plain wrong.
-        counter = self.counter_factory('?')
-        counter.context = '[%s] ' % object_name
         if parts_generator is None:
             parts_generator = FileIOPartsGenerator()
         if part_handler is None:
             part_handler = SingleProcessPartUploader()
+        # TODO - probably need some pluggable strategy for getting the parts
+        # count (if desired) or not (optimization) - maybe parts_count()
+        # method on IPartsGenerator.
+        # Or maybe this whole counter idea is just plain wrong.
+        counter = self.counter_factory(parts_generator.count_parts(fd))
+        counter.context = '[object_name=%s] ' % object_name
         part_handler.client = client
         d = Deferred()
         task = MultipartUpload(client, fd, parts_generator, part_handler,

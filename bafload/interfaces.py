@@ -47,6 +47,9 @@ class IPartsGenerator(IProgressLogger):
     each range of parts.
     """
 
+    part_size = Attribute("Part size. For S3 this should be no smaller "
+                          "than 5MB.")
+
     def generate_parts(fd):
         """
         This method should generate or return iternable for parts from
@@ -55,6 +58,14 @@ class IPartsGenerator(IProgressLogger):
 
         @param fd: file-like object to read parts from
         """
+
+    def count_parts(fd):
+        """
+        Optionally return number of parts for the given file descriptor.
+        The string "?" should be returned if this cannot be determined or
+        for whatever other reason.
+        """
+
 
 class IPartHandler(IProgressLogger):
     """
