@@ -51,7 +51,8 @@ def start():
         fd = open(path)
         object_name = os.path.basename(path)
         content_type = mimetypes.guess_type(path)[0]
-        d = uploader.upload(fd, bucket, object_name, content_type=content_type)
+        d = uploader.upload(fd, bucket, object_name, content_type=content_type,
+                            amz_headers={'acl':'public-read'})
         finished.append(d)
     gatherResults(finished).addCallback(complete, log.err).addBoth(stop)
 

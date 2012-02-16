@@ -47,10 +47,12 @@ class InterfacesTestCase(TestCase):
 
 class TestMultipartUpload(MultipartUpload):
 
-    def upload(self, bucket, object_name, content_type, metadata):
+    def upload(self, bucket, object_name, content_type, metadata,
+               amz_headers={}):
         self.bucket = bucket
         self.object_name = object_name
         self.metadata = metadata
+        self.amz_headers = amz_headers
         self.finished.callback(self)
 
 
@@ -149,6 +151,7 @@ class MultipartUploadTestCase(TestCase):
         part_handler = DummyPartHandler()
         counter = PartsTransferredCounter('?')
         d = Deferred()
+        amz_headers = {'acl': 'public-read'}
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
         def check(task):
@@ -169,8 +172,11 @@ class MultipartUploadTestCase(TestCase):
                 MultipartInitiationResponse)
             self.assertIsInstance(task.completion_response,
                 MultipartCompletionResponse)
+            self.assertEqual(client.calls, [
+                ('init_multipart_upload', 'mybucket',
+                 'mykey', '', {}, {'acl': 'public-read'})])
         d.addCallback(check)
-        upload.upload('mybucket', 'mykey', '', {})
+        upload.upload('mybucket', 'mykey', '', {}, amz_headers)
         return d.addErrback(log.err)
 
 class MultipartUploadsManagerTestCase(TestCase):
@@ -199,6 +205,7 @@ class MultipartUploadsManagerTestCase(TestCase):
             self.assertEqual(task.metadata, {})
             self.assertIsInstance(task.counter, PartsTransferredCounter)
             self.assertIsInstance(task.client, S3Client)
+            self.assertEqual(task.amz_headers, {'acl': 'public-read'})
             self.assert_(self.log.buffer)
             verifyObject(IPartsGenerator, task.parts_generator)
             verifyObject(IPartHandler, task.part_handler)
@@ -206,6 +213,7 @@ class MultipartUploadsManagerTestCase(TestCase):
                 self.assertEqual(entry[0], 'msg')
         manager = MultipartUploadsManager(log=self.log)
         fd = StringIO("some data")
-        d = manager.upload(fd, 'mybucket', 'mykey')
+        d = manager.upload(fd, 'mybucket', 'mykey',
+                           amz_headers={'acl':'public-read'})
         d.addCallback(check)
         return d

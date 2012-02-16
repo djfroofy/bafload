@@ -23,8 +23,13 @@ class FakeLog(object):
 
 class FakeS3Client(object):
 
+    def __init__(self):
+        self.calls = []
+
     def init_multipart_upload(self, bucket, object_name, content_type,
-                              metadata):
+                              metadata, amz_headers={}):
+        self.calls.append(('init_multipart_upload', bucket, object_name,
+            content_type, metadata, amz_headers))
         return succeed(MultipartInitiationResponse(bucket, object_name, '1234'))
 
     def upload_part(self, bucket, object_name, upload_id, part_number,

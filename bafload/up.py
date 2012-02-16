@@ -97,11 +97,13 @@ class MultipartUpload(ProgressLoggerMixin):
         self.finished = finished
         self.set_log(log)
 
-    def upload(self, bucket, object_name, content_type, metadata):
+    def upload(self, bucket, object_name, content_type, metadata,
+               amz_headers={}):
         self.part_handler.bucket = bucket
         self.part_handler.object_name = object_name
         d = self.client.init_multipart_upload(bucket, object_name,
-            content_type, metadata)
+            content_type=content_type, metadata=metadata,
+            amz_headers=amz_headers)
         return d.addCallback(self._initialized)
 
     def _initialized(self, response):
@@ -178,7 +180,8 @@ class MultipartUploadsManager(ProgressLoggerMixin):
         self.uploads = set()
 
     def upload(self, fd, bucket, object_name, content_type=None,
-               metadata={}, parts_generator=None, part_handler=None):
+               metadata={}, parts_generator=None, part_handler=None,
+               amz_headers={}):
         self.log.msg('Beginning upload to bucket=%s,key=%s' % (
                      bucket, object_name))
         client = self.region.get_s3_client()
@@ -199,7 +202,7 @@ class MultipartUploadsManager(ProgressLoggerMixin):
         self.uploads.add(task)
         d.addCallbacks(self._completed_upload, self.log.err)\
             .addBoth(self._remove_upload, task)
-        task.upload(bucket, object_name, content_type, metadata)
+        task.upload(bucket, object_name, content_type, metadata, amz_headers)
         return d
 
     def _completed_upload(self, task):
