@@ -151,6 +151,7 @@ class MultipartUploadTestCase(TestCase):
         part_handler = DummyPartHandler()
         counter = PartsTransferredCounter('?')
         d = Deferred()
+        received = []
         amz_headers = {'acl': 'public-read'}
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
@@ -168,6 +169,18 @@ class MultipartUploadTestCase(TestCase):
                         ('jjjjjjjjjj', 10)]
             self.assertEqual(parts_generator.generated, expected)
             self.assertEqual(part_handler.handled, expected)
+            expected = [
+                ('e09c80c42fda55f9d992e59ca6b3307d', 1),
+                ('82136b4240d6ce4ea7d03e51469a393b', 2),
+                ('e9b3390206d8dfc5ffc9b09284c0bbde', 3),
+                ('a9e49c7aefe022f0a8540361cce7575c', 4),
+                ('c5ba867d9056b7cecf87f8ce88af90f8', 5),
+                ('66952c6203ae23242590c0061675234d', 6),
+                ('fdc68ea4cf2763996cf215451b291c63', 7),
+                ('70270ca63a3de2d8905a9181a0245e58', 8),
+                ('d98bcb28df1de541e95a6722c5e983ea', 9),
+                ('c71a8da22bf4053760a604897627474c', 10),]
+            self.assertEqual(received, expected)
             self.assertIsInstance(task.init_response,
                 MultipartInitiationResponse)
             self.assertIsInstance(task.completion_response,
@@ -176,6 +189,8 @@ class MultipartUploadTestCase(TestCase):
                 ('init_multipart_upload', 'mybucket',
                  'mykey', '', {}, {'acl': 'public-read'})])
         d.addCallback(check)
+        received = []
+        upload.on_part_generated = received.append
         upload.upload('mybucket', 'mykey', '', {}, amz_headers)
         return d.addErrback(log.err)
 

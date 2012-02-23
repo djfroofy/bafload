@@ -86,6 +86,7 @@ class MultipartUpload(ProgressLoggerMixin):
 
     init_response = None
     completion_response = None
+    on_part_generated = None
 
     def __init__(self, client, fd, parts_generator, part_handler, counter,
                  finished, log=None):
@@ -120,6 +121,8 @@ class MultipartUpload(ProgressLoggerMixin):
         for (part, part_number) in gen:
             d = self.part_handler.handle_part(part, part_number)
             d.addCallback(count)
+            if self.on_part_generated is not None:
+                d.addCallback(self.on_part_generated)
             work.append(d)
             yield
         d = DeferredList(work)
@@ -181,7 +184,7 @@ class MultipartUploadsManager(ProgressLoggerMixin):
 
     def upload(self, fd, bucket, object_name, content_type=None,
                metadata={}, parts_generator=None, part_handler=None,
-               amz_headers={}):
+               amz_headers={}, on_part_generated=None):
         self.log.msg('Beginning upload to bucket=%s,key=%s' % (
                      bucket, object_name))
         client = self.region.get_s3_client()
@@ -199,6 +202,7 @@ class MultipartUploadsManager(ProgressLoggerMixin):
         d = Deferred()
         task = MultipartUpload(client, fd, parts_generator, part_handler,
                                counter, d, self.log)
+        task.on_part_generated = on_part_generated
         self.uploads.add(task)
         d.addCallbacks(self._completed_upload, self.log.err)\
             .addBoth(self._remove_upload, task)
