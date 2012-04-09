@@ -5,6 +5,7 @@ import random
 
 from zope.interface import implements
 
+from twisted.python.failure import Failure
 from twisted.internet import reactor
 from twisted.internet.defer import succeed, fail, Deferred, DeferredList
 from twisted.internet.task import coiterate
@@ -108,14 +109,14 @@ class MultipartUpload(ProgressLoggerMixin):
         d = self.client.init_multipart_upload(bucket, object_name,
             content_type=content_type, metadata=metadata,
             amz_headers=amz_headers)
-        return d.addCallback(self._initialized)
+        d.addCallback(self._initialized)
 
     def _initialized(self, response):
         self.part_handler.upload_id = response.upload_id
         self.init_response = response
-        return coiterate(self._generate_parts(
-            self.parts_generator.generate_parts(self.fd),
-            self.delay_gen()))
+        coiterate(self._generate_parts(
+                    self.parts_generator.generate_parts(self.fd),
+                    self.delay_gen()))
 
     def _generate_parts(self, gen, delay_gen, succeeded=()):
         def count(result):
@@ -127,22 +128,24 @@ class MultipartUpload(ProgressLoggerMixin):
             d.addCallback(count)
             if self.on_part_generated is not None:
                 d.addCallback(self.on_part_generated)
-            d.addErrback(UploadPartError)
+            def eb(why):
+                return Failure(UploadPartError(why.value, part, part_number))
+            d.addErrback(eb)
             work.append(d)
             yield
         for (part, part_number) in succeeded:
             work.append(succeed((part, part_number)))
-        d = DeferredList(work)
+        d = DeferredList(work, consumeErrors=True)
         d.addCallback(self._parts_uploaded, delay_gen)
 
     def _parts_uploaded(self, result, delay_gen):
-        parts_list = [ r[1] for r in result if r[0] ]
-        error_list = [ r[1] for r in result if not r[0] ]
+        parts_list = [r[1] for r in result if r[0]]
+        error_list = [r[1] for r in result if not r[0]]
         if error_list:
             def retry():
-                gen = ((e.part, e.part_number) for e in error_list)
-                return coiterate(self._generate_parts(gen, gen, delay_gen,
-                                                      parts_list))
+                gen = ((e.value.part, e.value.part_number) for e in error_list)
+                coiterate(self._generate_parts(gen, delay_gen,
+                                               parts_list))
             try:
                 delay_secs = delay_gen.next()
             except StopIteration:
