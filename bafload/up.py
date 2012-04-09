@@ -1,10 +1,12 @@
 # Copryright 2012 Drew Smathers, See LICENSE
 import os
 import types
+import random
 
 from zope.interface import implements
 
-from twisted.internet.defer import Deferred, DeferredList
+from twisted.internet import reactor
+from twisted.internet.defer import succeed, fail, Deferred, DeferredList
 from twisted.internet.task import coiterate
 
 from txaws.credentials import AWSCredentials
@@ -13,6 +15,7 @@ from txaws.service import AWSServiceRegion
 from bafload.interfaces import (ITransmissionCounter, IPartHandler,
     IPartsGenerator, IMultipartUploadsManager)
 from bafload.common import BaseCounter, ProgressLoggerMixin
+from bafload.errors import UploadPartError
 
 
 DEFAULT_PART_SIZE = 0x500000
@@ -111,9 +114,10 @@ class MultipartUpload(ProgressLoggerMixin):
         self.part_handler.upload_id = response.upload_id
         self.init_response = response
         return coiterate(self._generate_parts(
-            self.parts_generator.generate_parts(self.fd)))
+            self.parts_generator.generate_parts(self.fd),
+            self.delay_gen()))
 
-    def _generate_parts(self, gen):
+    def _generate_parts(self, gen, delay_gen, succeeded=()):
         def count(result):
             self.counter.increment_count()
             return result
@@ -123,28 +127,55 @@ class MultipartUpload(ProgressLoggerMixin):
             d.addCallback(count)
             if self.on_part_generated is not None:
                 d.addCallback(self.on_part_generated)
+            d.addErrback(UploadPartError)
             work.append(d)
             yield
+        for (part, part_number) in succeeded:
+            work.append(succeed((part, part_number)))
         d = DeferredList(work)
-        d.addCallback(self._parts_uploaded)
+        d.addCallback(self._parts_uploaded, delay_gen)
 
-    def _parts_uploaded(self, result):
-        # TODO - handle errors here. possible create a new generator
-        # to pass back to generate parts and try again X times for
-        # failed parts?
-        parts_list = [ r[1] for r in  result ]
+    def _parts_uploaded(self, result, delay_gen):
+        parts_list = [ r[1] for r in result if r[0] ]
+        error_list = [ r[1] for r in result if not r[0] ]
+        if error_list:
+            def retry():
+                gen = ((e.part, e.part_number) for e in error_list)
+                return coiterate(self._generate_parts(gen, gen, delay_gen,
+                                                      parts_list))
+            try:
+                delay_secs = delay_gen.next()
+            except StopIteration:
+                return self._error(error_list[0])
+            return reactor.callLater(delay_secs, retry)
+        self._try_complete(parts_list, delay_gen)
+
+    def _try_complete(self, parts_list, delay_gen):
         bucket = self.part_handler.bucket
         object_name = self.part_handler.object_name
         upload_id = self.init_response.upload_id
         d = self.client.complete_multipart_upload(bucket, object_name,
             upload_id, parts_list)
         d.addCallback(self._completed)
+        def retry(why):
+            try:
+                secs = delay_gen.next()
+                return reactor.callLater(secs, self._try_complete, parts_list,
+                                         delay_gen)
+            except StopIteration:
+                return self._error(why)
+        d.addErrback(retry)
 
     def _completed(self, completion_response):
         self.completion_response = completion_response
         d = self.finished
         self.finished = None
         d.callback(self)
+
+    def _error(self, why):
+        d = self.finished
+        self.finished = None
+        d.errback(why)
 
     def __str__(self):
         cname = self.__class__.__name__
@@ -156,6 +187,18 @@ class MultipartUpload(ProgressLoggerMixin):
             s += ', bucket=%s, object_name=%s' % (
                 self.part_handler.bucket, self.part_handler.object_name)
         return s
+
+    def delay_gen(self):
+        """
+        Override me to customize delay decay function for retrying upload_part.
+        """
+        delay = 0.1
+        max_delay = 600
+        while delay < max_delay:
+            skew = min(delay, 2)
+            jitter = skew * (0.5 - random.random())
+            yield delay + jitter
+            delay *= 2
 
 class MultipartUploadsManager(ProgressLoggerMixin):
     """
