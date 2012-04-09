@@ -136,6 +136,19 @@ class ErroringPartHandler(object):
         return succeed((etag, part_number))
 
 
+class ErroringFakeS3Client(FakeS3Client):
+
+    def __init__(self, error_count=3):
+        FakeS3Client.__init__(self)
+        self.error_count = error_count
+
+    def complete_multipart_upload(self, *p, **kw):
+        if not self.error_count:
+            return FakeS3Client.complete_multipart_upload(self, *p, **kw)
+        self.error_count -= 1
+        return fail(ValueError('woops'))
+
+
 class SingleProcessPartUploaderTestCase(TestCase):
 
     def test_handle_part(self):
@@ -169,6 +182,41 @@ class MultipartUploadTestCase(TestCase):
         upload.init_response = r
         self.assertEqual(str(upload), "MultipartUpload upload_id=1234567890")
 
+    def _assertPartsCompleted(self, parts_generator, part_handler, received,
+                              task, client):
+        expected = [('aaaaaaaaaa', 1),
+                    ('bbbbbbbbbb', 2),
+                    ('cccccccccc', 3),
+                    ('dddddddddd', 4),
+                    ('eeeeeeeeee', 5),
+                    ('ffffffffff', 6),
+                    ('gggggggggg', 7),
+                    ('hhhhhhhhhh', 8),
+                    ('iiiiiiiiii', 9),
+                    ('jjjjjjjjjj', 10)]
+        self.assertEqual(parts_generator.generated, expected)
+        self.assertEqual(part_handler.handled, expected)
+        expected = [
+            ('e09c80c42fda55f9d992e59ca6b3307d', 1),
+            ('82136b4240d6ce4ea7d03e51469a393b', 2),
+            ('e9b3390206d8dfc5ffc9b09284c0bbde', 3),
+            ('a9e49c7aefe022f0a8540361cce7575c', 4),
+            ('c5ba867d9056b7cecf87f8ce88af90f8', 5),
+            ('66952c6203ae23242590c0061675234d', 6),
+            ('fdc68ea4cf2763996cf215451b291c63', 7),
+            ('70270ca63a3de2d8905a9181a0245e58', 8),
+            ('d98bcb28df1de541e95a6722c5e983ea', 9),
+            ('c71a8da22bf4053760a604897627474c', 10),]
+        self.assertEqual(received, expected)
+        self.assertIsInstance(task.init_response,
+            MultipartInitiationResponse)
+        self.assertIsInstance(task.completion_response,
+            MultipartCompletionResponse)
+        self.assertEqual(client.calls, [
+            ('init_multipart_upload', 'mybucket',
+             'mykey', '', {}, {'acl': 'public-read'})])
+
+
     def test_upload(self):
         client = FakeS3Client()
         parts_generator = DummyPartsGenerator()
@@ -181,37 +229,8 @@ class MultipartUploadTestCase(TestCase):
             counter, d, self.log)
         def check(task):
             self.assertIdentical(task, upload)
-            expected = [('aaaaaaaaaa', 1),
-                        ('bbbbbbbbbb', 2),
-                        ('cccccccccc', 3),
-                        ('dddddddddd', 4),
-                        ('eeeeeeeeee', 5),
-                        ('ffffffffff', 6),
-                        ('gggggggggg', 7),
-                        ('hhhhhhhhhh', 8),
-                        ('iiiiiiiiii', 9),
-                        ('jjjjjjjjjj', 10)]
-            self.assertEqual(parts_generator.generated, expected)
-            self.assertEqual(part_handler.handled, expected)
-            expected = [
-                ('e09c80c42fda55f9d992e59ca6b3307d', 1),
-                ('82136b4240d6ce4ea7d03e51469a393b', 2),
-                ('e9b3390206d8dfc5ffc9b09284c0bbde', 3),
-                ('a9e49c7aefe022f0a8540361cce7575c', 4),
-                ('c5ba867d9056b7cecf87f8ce88af90f8', 5),
-                ('66952c6203ae23242590c0061675234d', 6),
-                ('fdc68ea4cf2763996cf215451b291c63', 7),
-                ('70270ca63a3de2d8905a9181a0245e58', 8),
-                ('d98bcb28df1de541e95a6722c5e983ea', 9),
-                ('c71a8da22bf4053760a604897627474c', 10),]
-            self.assertEqual(received, expected)
-            self.assertIsInstance(task.init_response,
-                MultipartInitiationResponse)
-            self.assertIsInstance(task.completion_response,
-                MultipartCompletionResponse)
-            self.assertEqual(client.calls, [
-                ('init_multipart_upload', 'mybucket',
-                 'mykey', '', {}, {'acl': 'public-read'})])
+            self._assertPartsCompleted(parts_generator, part_handler,
+                                      received, task, client)
         d.addCallback(check)
         received = []
         upload.on_part_generated = received.append
@@ -229,40 +248,11 @@ class MultipartUploadTestCase(TestCase):
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
         def check(task):
-            errors = self.flushLoggedErrors()
+            self.flushLoggedErrors()
             self.assertEqual(len(self.delayed_calls), 3)
             self.assertIdentical(task, upload)
-            expected = [('aaaaaaaaaa', 1),
-                        ('bbbbbbbbbb', 2),
-                        ('cccccccccc', 3),
-                        ('dddddddddd', 4),
-                        ('eeeeeeeeee', 5),
-                        ('ffffffffff', 6),
-                        ('gggggggggg', 7),
-                        ('hhhhhhhhhh', 8),
-                        ('iiiiiiiiii', 9),
-                        ('jjjjjjjjjj', 10)]
-            self.assertEqual(parts_generator.generated, expected)
-            self.assertEqual(part_handler.handled, expected)
-            expected = [
-                ('e09c80c42fda55f9d992e59ca6b3307d', 1),
-                ('82136b4240d6ce4ea7d03e51469a393b', 2),
-                ('e9b3390206d8dfc5ffc9b09284c0bbde', 3),
-                ('a9e49c7aefe022f0a8540361cce7575c', 4),
-                ('c5ba867d9056b7cecf87f8ce88af90f8', 5),
-                ('66952c6203ae23242590c0061675234d', 6),
-                ('fdc68ea4cf2763996cf215451b291c63', 7),
-                ('70270ca63a3de2d8905a9181a0245e58', 8),
-                ('d98bcb28df1de541e95a6722c5e983ea', 9),
-                ('c71a8da22bf4053760a604897627474c', 10),]
-            self.assertEqual(received, expected)
-            self.assertIsInstance(task.init_response,
-                MultipartInitiationResponse)
-            self.assertIsInstance(task.completion_response,
-                MultipartCompletionResponse)
-            self.assertEqual(client.calls, [
-                ('init_multipart_upload', 'mybucket',
-                 'mykey', '', {}, {'acl': 'public-read'})])
+            self._assertPartsCompleted(parts_generator, part_handler,
+                                      received, task, client)
         d.addCallback(check)
         received = []
         upload.on_part_generated = received.append
@@ -287,6 +277,47 @@ class MultipartUploadTestCase(TestCase):
             return why
         d.addErrback(eb)
         return self.assertFailure(d, UploadPartError)
+
+    def test_upload_on_complete_error_recovery(self):
+        client = ErroringFakeS3Client()
+        parts_generator = DummyPartsGenerator()
+        part_handler = DummyPartHandler()
+        counter = PartsTransferredCounter('?')
+        d = Deferred()
+        received = []
+        amz_headers = {'acl': 'public-read'}
+        upload = MultipartUpload(client, None, parts_generator, part_handler,
+            counter, d, self.log)
+        def check(task):
+            self.flushLoggedErrors()
+            self.assertEqual(len(self.delayed_calls), 3)
+            self.assertIdentical(task, upload)
+            self._assertPartsCompleted(parts_generator, part_handler,
+                                      received, task, client)
+        d.addCallback(check)
+        received = []
+        upload.on_part_generated = received.append
+        upload.upload('mybucket', 'mykey', '', {}, amz_headers)
+        return d
+
+    def test_upload_on_complete_error_timeout_finally(self):
+        client = ErroringFakeS3Client(100)
+        parts_generator = DummyPartsGenerator()
+        part_handler = DummyPartHandler()
+        counter = PartsTransferredCounter('?')
+        d = Deferred()
+        received = []
+        amz_headers = {'acl': 'public-read'}
+        upload = MultipartUpload(client, None, parts_generator, part_handler,
+            counter, d, self.log)
+        received = []
+        upload.on_part_generated = received.append
+        upload.upload('mybucket', 'mykey', '', {}, amz_headers)
+        def eb(why):
+            self.assertEquals(len(self.delayed_calls), 13)
+            return why
+        d.addErrback(eb)
+        return self.assertFailure(d, ValueError)
 
 class MultipartUploadsManagerTestCase(TestCase):
 
