@@ -107,3 +107,19 @@ class IMultipartUploadsManager(IProgressLogger):
             this method should use some default provider)
         """
 
+
+class IByteLength(Interface):
+    """
+    An integral byte count.
+    """
+
+
+class IFile(Interface):
+    """
+    Stub interface for file objects.
+    """
+
+class IStringIO(Interface):
+    """
+    Stub interface for StringIO objects.
+    """

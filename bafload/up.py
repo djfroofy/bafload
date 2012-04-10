@@ -9,10 +9,15 @@ from twisted.internet.task import coiterate
 
 from txaws.service import AWSServiceRegion
 
+from bafload import adapters
 from bafload.interfaces import (IPartHandler, IPartsGenerator,
-        IMultipartUploadsManager)
+        IMultipartUploadsManager, IByteLength)
 from bafload.common import BaseCounter, ProgressLoggerMixin
 from bafload.retry import BinaryExponentialBackoff
+
+
+# pyflakes
+del adapters
 
 
 DEFAULT_PART_SIZE = 0x500000
@@ -35,21 +40,14 @@ class FileIOPartsGenerator(ProgressLoggerMixin):
         part_number = 1
         part = read(size)
         while part:
-            # TODO - the part generated should optimally be an
-            # C{IBodyProducer} rather than reading 5MB of data
-            # for each part into memory
             yield (part, part_number)
             part_number += 1
             part = read(size)
 
     def count_parts(self, fd):
-        # XXX - maybe some stub interfaces and adaptors instead
-        # of this messy type checking
-        if isinstance(fd, types.FileType):
-            size = os.fstat(fd.fileno()).st_size
-        elif hasattr(fd, 'len'):
-            size = fd.len
-        else:
+        try:
+            size = IByteLength(fd)
+        except TypeError:
             return '?'
         count = size / self.part_size
         if size % self.part_size:
