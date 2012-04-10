@@ -8,6 +8,16 @@ from txaws.s3.model import (MultipartInitiationResponse,
 from bafload.interfaces import ILog
 
 
+class FakeClock(object):
+
+    def __init__(self):
+        self.calls = []
+
+    def callLater(self, when, f, *a, **kw):
+        self.calls.append((when, f, a, kw))
+        f(*a, **kw)
+
+
 class FakeLog(object):
     implements(ILog)
 

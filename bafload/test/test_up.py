@@ -5,7 +5,6 @@ from zope.interface.verify import verifyClass, verifyObject
 from zope.interface import implements
 
 from twisted.internet.defer import Deferred, succeed, fail
-from twisted.python import log
 from twisted.trial.unittest import TestCase
 
 from txaws.s3.client import S3Client
@@ -16,10 +15,9 @@ from txaws.credentials import AWSCredentials
 
 from bafload.interfaces import (IPartsGenerator, ITransmissionCounter,
     IPartHandler, IMultipartUploadsManager)
-from bafload.errors import UploadPartError
 from bafload.up import (FileIOPartsGenerator, PartsTransferredCounter,
     SingleProcessPartUploader, MultipartUploadsManager, MultipartUpload)
-from bafload.test.util import FakeLog, FakeS3Client
+from bafload.test.util import FakeLog, FakeS3Client, FakeClock
 from bafload import up as up_module
 
 
@@ -169,15 +167,11 @@ class MultipartUploadTestCase(TestCase):
     def setUp(self):
         super(MultipartUploadTestCase, self).setUp()
         self.log = FakeLog()
-        self.delayed_calls = []
-        self.patch(up_module, 'reactor', self)
-
-    def callLater(self, delay, f, *a, **kw):
-        self.delayed_calls.append((delay, f, a, kw))
-        f(*a, **kw)
+        self.clock = FakeClock()
 
     def test_str(self):
         upload = MultipartUpload(None, None, None, None, None, Deferred())
+        upload.retry_strategy.clock = self.clock
         r = MultipartInitiationResponse('', '', '1234567890')
         upload.init_response = r
         self.assertEqual(str(upload), "MultipartUpload upload_id=1234567890")
@@ -227,6 +221,7 @@ class MultipartUploadTestCase(TestCase):
         amz_headers = {'acl': 'public-read'}
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
+        upload.retry_strategy.clock = self.clock
         def check(task):
             self.assertIdentical(task, upload)
             self._assertPartsCompleted(parts_generator, part_handler,
@@ -247,9 +242,10 @@ class MultipartUploadTestCase(TestCase):
         amz_headers = {'acl': 'public-read'}
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
+        upload.retry_strategy.clock = self.clock
         def check(task):
             self.flushLoggedErrors()
-            self.assertEqual(len(self.delayed_calls), 3)
+            self.assertEqual(len(self.clock.calls), 30)
             self.assertIdentical(task, upload)
             self._assertPartsCompleted(parts_generator, part_handler,
                                       received, task, client)
@@ -269,14 +265,15 @@ class MultipartUploadTestCase(TestCase):
         amz_headers = {'acl': 'public-read'}
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
+        upload.retry_strategy.clock = self.clock
         received = []
         upload.on_part_generated = received.append
         upload.upload('mybucket', 'mykey', '', {}, amz_headers)
         def eb(why):
-            self.assertEquals(len(self.delayed_calls), 13)
+            self.assertEquals(len(self.clock.calls), 110)
             return why
         d.addErrback(eb)
-        return self.assertFailure(d, UploadPartError)
+        return self.assertFailure(d, ValueError)
 
     def test_upload_on_complete_error_recovery(self):
         client = ErroringFakeS3Client()
@@ -288,9 +285,10 @@ class MultipartUploadTestCase(TestCase):
         amz_headers = {'acl': 'public-read'}
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
+        upload.retry_strategy.clock = self.clock
         def check(task):
             self.flushLoggedErrors()
-            self.assertEqual(len(self.delayed_calls), 3)
+            self.assertEqual(len(self.clock.calls), 3)
             self.assertIdentical(task, upload)
             self._assertPartsCompleted(parts_generator, part_handler,
                                       received, task, client)
@@ -310,14 +308,16 @@ class MultipartUploadTestCase(TestCase):
         amz_headers = {'acl': 'public-read'}
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
+        upload.retry_strategy.clock = self.clock
         received = []
         upload.on_part_generated = received.append
         upload.upload('mybucket', 'mykey', '', {}, amz_headers)
         def eb(why):
-            self.assertEquals(len(self.delayed_calls), 13)
+            self.assertEquals(len(self.clock.calls), 11)
             return why
         d.addErrback(eb)
         return self.assertFailure(d, ValueError)
+
 
 class MultipartUploadsManagerTestCase(TestCase):
 
