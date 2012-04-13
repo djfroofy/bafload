@@ -10,12 +10,19 @@ from bafload.interfaces import ILog
 
 class FakeClock(object):
 
-    def __init__(self):
+    def __init__(self, seconds=0):
         self.calls = []
+        self._seconds = seconds
 
     def callLater(self, when, f, *a, **kw):
         self.calls.append((when, f, a, kw))
         f(*a, **kw)
+
+    def seconds(self):
+        return self._seconds
+
+    def tick(self, amount=1):
+        self._seconds += amount
 
 
 class FakeLog(object):

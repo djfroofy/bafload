@@ -1,7 +1,14 @@
 import math
 from collections import deque
 
+from zope.interface import implements
+
 from twisted.internet import reactor
+
+from bafload.interfaces import IThrouputCounter
+
+
+__all__ = ['SlidingStats', 'ThroughputCounter']
 
 
 class SlidingStats(object):
@@ -29,7 +36,7 @@ class SlidingStats(object):
     def update(self, t, count):#, current=False):
         """
         Add C{count} the count at the base of time t (t') where t' is given by:
-        
+
         t' == t  - t % slot_duration_secs
 
         If t' is older than our earliest time in the window this is a noop. If
@@ -56,12 +63,16 @@ class SlidingStats(object):
 
 
 class ThroughputCounter(object):
+    implements(IThrouputCounter)
+
     cutoff = 3600
 
-    def __init__(self, clock=None):
+    def __init__(self, clock=None, stats=None):
         if clock is None:
             clock = reactor
-        self.stats = SlidingStats(clock.seconds())
+        if stats is None:
+            stats = SlidingStats(clock.seconds())
+        self.stats = stats
         self.starts = {}
         self.clock = clock
 
@@ -73,13 +84,14 @@ class ThroughputCounter(object):
         t1 = self.clock.seconds()
         t0 = self.starts.pop(id)
         total = t1 - t0
-        if total < 5:
+        dur = self.stats.slot_duration_secs
+        if total < dur:
             self.stats.update(t1, size)
         else:
-            for i in xrange(int(math.ceil(total / 5.))):
-                t_k = t1 - (i * 5.)
-                self.stats.update(t_k, size)
+            divisions = int(math.ceil(total / float(dur)))
+            for i in xrange(divisions):
+                t_k = t1 - (i * float(dur))
+                self.stats.update(t_k, size / float(divisions))
 
     def read(self):
-        self.stats.update(time.time(), 0)
-        return [s[1] for s in self.stats.slots]
+        return list(self.stats.slots)

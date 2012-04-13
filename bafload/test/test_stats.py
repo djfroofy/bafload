@@ -1,8 +1,11 @@
-from pprint import pformat
+from zope.interface.verify import verifyClass, verifyObject
 
 from twisted.trial.unittest import TestCase
 
-from bafload.stats import SlidingStats
+from bafload.test.util import FakeClock
+from bafload.interfaces import IThrouputCounter
+from bafload.stats import SlidingStats, ThroughputCounter
+
 
 class SlidingStatsTestCase(TestCase):
 
@@ -44,7 +47,41 @@ class SlidingStatsTestCase(TestCase):
         expected = zip(window, [0] * 99 + [7])
         self.assertEquals(list(stats.slots), expected)
 
-
 class ThroughputCounterTestCase(TestCase):
-    pass
+
+    def test_iface(self):
+        verifyClass(IThrouputCounter, ThroughputCounter)
+        verifyObject(IThrouputCounter, ThroughputCounter())
+
+    def test_initialization(self):
+        clock = FakeClock()
+        clock.tick(200)
+        counter = ThroughputCounter(clock)
+        last = counter.stats.slots[-1][0]
+        self.assertEquals(last, 200)
+
+    def _build_counter(self):
+        stats = SlidingStats(50, 1, 50)
+        clock = FakeClock(50)
+        return ThroughputCounter(clock, stats)
+
+    def test_read(self):
+        counter = self._build_counter()
+        clock = counter.clock
+        counter.start_entity('a')
+        window = map(float, range(1, 51))
+        expected = zip(window, [0] * 50)
+        self.assertEquals(counter.read(), expected)
+        clock.tick(5)
+        counter.start_entity('b')
+        clock.tick(15)
+        counter.stop_entity('a', 40)
+        window = map(float, range(21, 71))
+        expected = zip(window, [0] * 30 + [2] * 20)
+        self.assertEquals(counter.read(), expected)
+        clock.tick(25)
+        counter.stop_entity('b', 20)
+        window = map(float, range(46, 96))
+        expected = zip(window, [0] * 5 + [2] * 5 + [2.5] * 15 + [0.5] * 25)
+        self.assertEquals(counter.read(), expected)
 
