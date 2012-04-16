@@ -33,7 +33,7 @@ class SlidingStats(object):
         t0 = dur + t - self.generation
         self.slots = deque([(t0 + (i * dur), 0) for i in xrange(n)], n)
 
-    def update(self, t, count):#, current=False):
+    def update(self, t, count):
         """
         Add C{count} the count at the base of time t (t') where t' is given by:
 
@@ -95,3 +95,4 @@ class ThroughputCounter(object):
 
     def read(self):
         return list(self.stats.slots)
+

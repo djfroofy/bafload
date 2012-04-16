@@ -84,4 +84,10 @@ class ThroughputCounterTestCase(TestCase):
         window = map(float, range(46, 96))
         expected = zip(window, [0] * 5 + [2] * 5 + [2.5] * 15 + [0.5] * 25)
         self.assertEquals(counter.read(), expected)
+        counter.start_entity('c')
+        counter.stop_entity('c', 10)
+        window = map(float, range(46, 96))
+        expected = zip(window, [0] * 5 + [2] * 5 + [2.5] * 15 + [0.5] * 24
+                               + [10.5])
+        self.assertEquals(counter.read(), expected)
 

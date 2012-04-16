@@ -18,6 +18,7 @@ from bafload.interfaces import (IPartsGenerator, ITransmissionCounter,
 from bafload.up import (FileIOPartsGenerator, PartsTransferredCounter,
     SingleProcessPartUploader, MultipartUploadsManager, MultipartUpload)
 from bafload.test.util import FakeLog, FakeS3Client, FakeClock
+from bafload.stats import ThroughputCounter, SlidingStats
 from bafload import up as up_module
 
 
@@ -162,6 +163,7 @@ class SingleProcessPartUploaderTestCase(TestCase):
         d.addCallback(check)
         return d
 
+
 class MultipartUploadTestCase(TestCase):
 
     def setUp(self):
@@ -270,6 +272,7 @@ class MultipartUploadTestCase(TestCase):
         upload.on_part_generated = received.append
         upload.upload('mybucket', 'mykey', '', {}, amz_headers)
         def eb(why):
+            self.flushLoggedErrors()
             self.assertEquals(len(self.clock.calls), 110)
             return why
         d.addErrback(eb)
@@ -281,7 +284,6 @@ class MultipartUploadTestCase(TestCase):
         part_handler = DummyPartHandler()
         counter = PartsTransferredCounter('?')
         d = Deferred()
-        received = []
         amz_headers = {'acl': 'public-read'}
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
@@ -304,7 +306,6 @@ class MultipartUploadTestCase(TestCase):
         part_handler = DummyPartHandler()
         counter = PartsTransferredCounter('?')
         d = Deferred()
-        received = []
         amz_headers = {'acl': 'public-read'}
         upload = MultipartUpload(client, None, parts_generator, part_handler,
             counter, d, self.log)
@@ -313,8 +314,57 @@ class MultipartUploadTestCase(TestCase):
         upload.on_part_generated = received.append
         upload.upload('mybucket', 'mykey', '', {}, amz_headers)
         def eb(why):
+            self.flushLoggedErrors()
             self.assertEquals(len(self.clock.calls), 11)
             return why
+        d.addErrback(eb)
+        return self.assertFailure(d, ValueError)
+
+    def test_upload_with_throughput_counter(self):
+        client = FakeS3Client()
+        parts_generator = DummyPartsGenerator()
+        part_handler = DummyPartHandler()
+        counter = PartsTransferredCounter('?')
+        stats = SlidingStats(self.clock.seconds(), size=100)
+        throughput_counter = ThroughputCounter(clock=self.clock, stats=stats)
+        d = Deferred()
+        amz_headers = {'acl': 'public-read'}
+        upload = MultipartUpload(client, None, parts_generator, part_handler,
+            counter, d, self.log)
+        upload.retry_strategy.clock = self.clock
+        upload.throughput_counter = throughput_counter
+        def check(task):
+            self.assertIdentical(task, upload)
+            self._assertPartsCompleted(parts_generator, part_handler,
+                                      received, task, client)
+            self.assertEquals(throughput_counter.read()[-1], (0, 100))
+        d.addCallback(check)
+        received = []
+        upload.on_part_generated = received.append
+        upload.upload('mybucket', 'mykey', '', {}, amz_headers)
+        return d
+
+    def test_upload_with_throughput_counter_and_error(self):
+        client = FakeS3Client()
+        parts_generator = DummyPartsGenerator()
+        part_handler = ErroringPartHandler(100)
+        counter = PartsTransferredCounter('?')
+        stats = SlidingStats(self.clock.seconds(), size=100)
+        throughput_counter = ThroughputCounter(clock=self.clock, stats=stats)
+        d = Deferred()
+        amz_headers = {'acl': 'public-read'}
+        upload = MultipartUpload(client, None, parts_generator, part_handler,
+            counter, d, self.log)
+        upload.retry_strategy.clock = self.clock
+        upload.throughput_counter = throughput_counter
+        received = []
+        upload.on_part_generated = received.append
+        def eb(why):
+            self.flushLoggedErrors()
+            self.assertEquals(len(self.clock.calls), 110)
+            self.assertEquals(throughput_counter.read()[-1], (0, 0))
+            return why
+        upload.upload('mybucket', 'mykey', '', {}, amz_headers)
         d.addErrback(eb)
         return self.assertFailure(d, ValueError)
 

@@ -56,7 +56,7 @@ class BinaryExponentialBackoff(object):
             d = f(*a, **kw)
             d.addCallback(finished.callback)
             if self.log_errors:
-                d.addErrback(self._log_error, f, a, kw)
+                d.addErrback(self._log_error, f)
             d.addErrback(self._retry, finished, count + 1, f, a, kw)
         if count:
             when = self.slot_duration * ((2**count) - 1) * self.scatter()
@@ -64,7 +64,7 @@ class BinaryExponentialBackoff(object):
         else:
             retry()
 
-    def _log_error(self, why, f, a, kw):
-        self.log.err('Error applying f=%s with arguments args=%s, kwargs=%s.'
-                     % (f, a, kw), why)
+    def _log_error(self, why, f):
+        self.log.msg('Error applying function=%s' % f)
+        self.log.err(why)
         return why

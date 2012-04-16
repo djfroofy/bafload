@@ -50,17 +50,13 @@ class BinaryExponentialBackoffTestCase(TestCase):
         return d
 
     def test_retry_fail(self):
-        fails = []
-        def fail_12_times(a, k=0):
-            if len(fails) == 12:
-                return succeed((a, k))
-            fails.append(1)
+        def keep_failing(a, k=0):
             return fail(Failure(ValueError('woops')))
         def eb(why):
             self.assertEquals(len(self.clock.calls), 11)
             self.assertNErrorsLogged(12)
             return why
-        d = self.algo.retry(fail_12_times, 'a', k=45)
+        d = self.algo.retry(keep_failing, 'a', k=45)
         d.addErrback(eb)
         return self.assertFailure(d, ValueError)
 

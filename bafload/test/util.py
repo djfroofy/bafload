@@ -34,7 +34,7 @@ class FakeLog(object):
     def msg(self, *message, **kw):
         self.buffer.append(('msg', message, kw))
 
-    def err(self, stuff, why, **kw):
+    def err(self, stuff, why=None, **kw):
         self.buffer.append(('err', stuff, why, kw))
 
 

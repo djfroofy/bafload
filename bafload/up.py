@@ -1,11 +1,9 @@
 # Copryright 2012 Drew Smathers, See LICENSE
-import os
-import types
-
 from zope.interface import implements
 
 from twisted.internet.defer import Deferred, DeferredList
 from twisted.internet.task import coiterate
+from twisted.python.failure import Failure
 
 from txaws.service import AWSServiceRegion
 
@@ -14,10 +12,6 @@ from bafload.interfaces import (IPartHandler, IPartsGenerator,
         IMultipartUploadsManager, IByteLength)
 from bafload.common import BaseCounter, ProgressLoggerMixin
 from bafload.retry import BinaryExponentialBackoff
-
-
-# pyflakes
-del adapters
 
 
 DEFAULT_PART_SIZE = 0x500000
@@ -73,19 +67,13 @@ class SingleProcessPartUploader(ProgressLoggerMixin):
         return (part_number, headers['ETag'])
 
 
-class MultipartTaskCompletion(object):
-
-    def __init__(self, upload_id, task):
-        self.upload_id = upload_id
-        self.task = task
-
-
 class MultipartUpload(ProgressLoggerMixin):
 
     init_response = None
     completion_response = None
     on_part_generated = None
     retry_strategy = BinaryExponentialBackoff()
+    throughput_counter = None
 
     def __init__(self, client, fd, parts_generator, part_handler, counter,
                  finished, log=None):
@@ -121,6 +109,10 @@ class MultipartUpload(ProgressLoggerMixin):
         retry = self.retry_strategy.retry
         for (part, part_number) in gen:
             d = retry(self.part_handler.handle_part, part, part_number)
+            if self.throughput_counter is not None:
+                entity_id = '%s-%s' % (id(self), part_number)
+                self.throughput_counter.start_entity(entity_id)
+                d.addBoth(self._stop_entity, entity_id, len(part))
             d.addCallback(count)
             if self.on_part_generated is not None:
                 d.addCallback(self.on_part_generated)
@@ -129,7 +121,20 @@ class MultipartUpload(ProgressLoggerMixin):
         d = DeferredList(work, consumeErrors=True)
         d.addCallback(self._parts_uploaded)
 
+    def _stop_entity(self, result, entity_id, size):
+        """
+        I throughput_counter is defined then call stop_entity with size unless
+        this is in context of error (which we'll assume 0 bytes transferred).
+        """
+        if isinstance(result, Failure):
+            size = 0
+        self.throughput_counter.stop_entity(entity_id, size)
+        return result
+
     def _parts_uploaded(self, result):
+        """
+        Final callback when all multipart upload_part operations are complete.
+        """
         parts_list = [r[1] for r in result if r[0]]
         error_list = [r[1] for r in result if not r[0]]
         if error_list:
@@ -193,7 +198,8 @@ class MultipartUploadsManager(ProgressLoggerMixin):
 
     def upload(self, fd, bucket, object_name, content_type=None,
                metadata={}, parts_generator=None, part_handler=None,
-               amz_headers={}, on_part_generated=None):
+               amz_headers={}, on_part_generated=None,
+               throughput_counter=None):
         self.log.msg('Beginning upload to bucket=%s,key=%s' % (
                      bucket, object_name))
         client = self.region.get_s3_client()
@@ -212,6 +218,7 @@ class MultipartUploadsManager(ProgressLoggerMixin):
         task = MultipartUpload(client, fd, parts_generator, part_handler,
                                counter, d, self.log)
         task.on_part_generated = on_part_generated
+        task.throughput_counter = throughput_counter
         self.uploads.add(task)
         d.addCallbacks(self._completed_upload, self.log.err)\
             .addBoth(self._remove_upload, task)
@@ -226,3 +233,5 @@ class MultipartUploadsManager(ProgressLoggerMixin):
         self.uploads.remove(task)
         return task
 
+# make pyflakes happy
+_PYFLAKES = [adapters]
