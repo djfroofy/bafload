@@ -107,6 +107,29 @@ class IMultipartUploadsManager(IProgressLogger):
             this method should use some default provider)
         """
 
+class IThrouputCounter(Interface):
+    """
+    An API for tracking average throughput.
+    """
+
+    def start_entity(id):
+        """
+        Mark current time as start of upload for entity C{id}.
+        """
+
+    def stop_entity(id, size):
+       """
+       Mark current time as end of upload of entity C{id} where tranferred
+       bytes count is C{size}.
+       """
+
+    def read():
+        """
+        Read time series data in the form:
+
+        [(t_0, v_0), (t_1, v_1), ... (t_n, v_n)]
+        """
+
 
 class IByteLength(Interface):
     """

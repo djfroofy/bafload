@@ -10,6 +10,7 @@ from twisted.internet.defer import gatherResults
 from txaws.credentials import AWSCredentials
 from txaws.service import AWSServiceRegion
 
+from bafload.stats import ThroughputCounter
 from bafload.up import MultipartUploadsManager
 
 
@@ -30,6 +31,28 @@ def error(message):
     reactor.stop()
 
 
+def show_stats(result, throughput_counter):
+    table = throughput_counter.read()
+    slot_dur = throughput_counter.stats.slot_duration_secs
+    (index0, (t0, _)) = [(i, (t, count))
+            for (i, (t, count)) in enumerate(table) if count][0]
+    (index1, (tk, _)) = [(i, (t, count))
+            for (i, (t, count)) in enumerate(reversed(table)) if count][0]
+    index1 = throughput_counter.stats.size - index1
+    elapsed = (tk - t0) + slot_dur
+    counts = [slot[1] for slot in table[index0:index1+1]]
+    tx = sum(counts)
+    max_count = max(counts)
+    max_mbps = max_count / float(slot_dur) / (2**20)
+    min_mbps = min(counts) / float(slot_dur) / (2**20)
+    avg_mbps = tx / float(elapsed) / (2**20)
+    print 'Average Transfer: %3.3fMBs' % avg_mbps
+    print 'Max: %3.3fMBs' % max_mbps
+    print 'Min: %3.3fMBs' % min_mbps
+    print 'Total tx: %2.2fMB' % (tx / 2.0**20)
+    return result
+
+
 def complete(result):
     print 'successfully uploaded: %s' % ', '.join(paths)
     return result
@@ -47,14 +70,17 @@ def start():
     region = AWSServiceRegion(creds=creds, region=options.region)
     uploader = MultipartUploadsManager(region=region)
     finished = []
+    throughput_counter = ThroughputCounter()
     for path in paths:
         fd = open(path)
         object_name = os.path.basename(path)
         content_type = mimetypes.guess_type(path)[0]
         d = uploader.upload(fd, bucket, object_name, content_type=content_type,
-                            amz_headers={'acl':'public-read'})
+                            amz_headers={'acl':'public-read'},
+                            throughput_counter=throughput_counter)
         finished.append(d)
-    gatherResults(finished).addCallback(complete, log.err).addBoth(stop)
+    gatherResults(finished).addCallback(show_stats, throughput_counter
+            ).addCallbacks(complete, log.err).addBoth(stop)
 
 
 log.startLogging(sys.stdout)
