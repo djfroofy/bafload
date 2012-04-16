@@ -46,12 +46,6 @@ def show_stats(result, throughput_counter):
     max_mbps = max_count / float(slot_dur) / (2**20)
     min_mbps = min(counts) / float(slot_dur) / (2**20)
     avg_mbps = tx / float(elapsed) / (2**20)
-    star_chart = []
-    for e in table[index0:index1+1]:
-        ct = int((e[1] / float(max_count)) * 60)
-        star_chart.append('*' * ct)
-    print '========= Throughput graph:'
-    print '\n'.join(star_chart)
     print 'Average Transfer: %3.3fMBs' % avg_mbps
     print 'Max: %3.3fMBs' % max_mbps
     print 'Min: %3.3fMBs' % min_mbps
