@@ -186,20 +186,21 @@ class MultipartUploadsManager(ProgressLoggerMixin):
     """
     implements(IMultipartUploadsManager)
 
-    def __init__(self, creds=None, counter_factory=None, log=None, region=None):
+    def __init__(self, creds=None, counter_factory=None, log=None, region=None,
+                 throughput_counter=None):
         if counter_factory is None:
             counter_factory = PartsTransferredCounter
         if region is None:
             region = AWSServiceRegion(creds=creds)
         self.region = region
         self.counter_factory = counter_factory
+        self.throughput_counter = throughput_counter
         self.set_log(log)
         self.uploads = set()
 
     def upload(self, fd, bucket, object_name, content_type=None,
                metadata={}, parts_generator=None, part_handler=None,
-               amz_headers={}, on_part_generated=None,
-               throughput_counter=None):
+               amz_headers={}, on_part_generated=None):
         self.log.msg('Beginning upload to bucket=%s,key=%s' % (
                      bucket, object_name))
         client = self.region.get_s3_client()
@@ -218,7 +219,7 @@ class MultipartUploadsManager(ProgressLoggerMixin):
         task = MultipartUpload(client, fd, parts_generator, part_handler,
                                counter, d, self.log)
         task.on_part_generated = on_part_generated
-        task.throughput_counter = throughput_counter
+        task.throughput_counter = self.throughput_counter
         self.uploads.add(task)
         d.addCallbacks(self._completed_upload, self.log.err)\
             .addBoth(self._remove_upload, task)
