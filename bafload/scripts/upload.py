@@ -68,16 +68,16 @@ def start():
         return error("Must supply a bucket name!")
     creds = AWSCredentials(options.access_key, options.secret_key)
     region = AWSServiceRegion(creds=creds, region=options.region)
-    uploader = MultipartUploadsManager(region=region)
-    finished = []
     throughput_counter = ThroughputCounter()
+    uploader = MultipartUploadsManager(region=region,
+            throughput_counter=throughput_counter)
+    finished = []
     for path in paths:
         fd = open(path)
         object_name = os.path.basename(path)
         content_type = mimetypes.guess_type(path)[0]
         d = uploader.upload(fd, bucket, object_name, content_type=content_type,
-                            amz_headers={'acl':'public-read'},
-                            throughput_counter=throughput_counter)
+                            amz_headers={'acl':'public-read'})
         finished.append(d)
     gatherResults(finished).addCallback(show_stats, throughput_counter
             ).addCallbacks(complete, log.err).addBoth(stop)

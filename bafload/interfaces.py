@@ -130,6 +130,21 @@ class IThrouputCounter(Interface):
         [(t_0, v_0), (t_1, v_1), ... (t_n, v_n)]
         """
 
+class IThrottler(Interface):
+    """
+    An IThrottler "throttles" calls to Deferred-returning functions. The exact
+    throttling algorithm (if any) is up to the specific provider.
+    """
+
+    def throttle(func, *a, **kw):
+        """
+        Throttle call to function C{func}.
+
+        @param func: The func to call
+        @param a: positional arguments to C{func}
+        @param kw: keyword arguments to C{func}
+        """
+
 
 class IByteLength(Interface):
     """

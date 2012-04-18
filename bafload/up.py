@@ -12,6 +12,7 @@ from bafload.interfaces import (IPartHandler, IPartsGenerator,
         IMultipartUploadsManager, IByteLength)
 from bafload.common import BaseCounter, ProgressLoggerMixin
 from bafload.retry import BinaryExponentialBackoff
+from bafload.throttle import MaxConcurrentThrottler
 
 
 DEFAULT_PART_SIZE = 0x500000
@@ -74,6 +75,7 @@ class MultipartUpload(ProgressLoggerMixin):
     on_part_generated = None
     retry_strategy = BinaryExponentialBackoff()
     throughput_counter = None
+    throttler = MaxConcurrentThrottler()
 
     def __init__(self, client, fd, parts_generator, part_handler, counter,
                  finished, log=None):
@@ -90,9 +92,10 @@ class MultipartUpload(ProgressLoggerMixin):
         self.part_handler.bucket = bucket
         self.part_handler.object_name = object_name
         retry = self.retry_strategy.retry
-        d = retry(self.client.init_multipart_upload, bucket, object_name,
-            content_type=content_type, metadata=metadata,
-            amz_headers=amz_headers)
+        d = retry(self.throttler.throttle,
+                  self.client.init_multipart_upload, bucket, object_name,
+                  content_type=content_type, metadata=metadata,
+                  amz_headers=amz_headers)
         d.addCallback(self._initialized)
 
     def _initialized(self, response):
@@ -108,7 +111,8 @@ class MultipartUpload(ProgressLoggerMixin):
         work = []
         retry = self.retry_strategy.retry
         for (part, part_number) in gen:
-            d = retry(self.part_handler.handle_part, part, part_number)
+            d = retry(self.throttler.throttle,
+                      self.part_handler.handle_part, part, part_number)
             if self.throughput_counter is not None:
                 entity_id = '%s-%s' % (id(self), part_number)
                 self.throughput_counter.start_entity(entity_id)
@@ -143,7 +147,8 @@ class MultipartUpload(ProgressLoggerMixin):
         object_name = self.part_handler.object_name
         upload_id = self.init_response.upload_id
         retry = self.retry_strategy.retry
-        d = retry(self.client.complete_multipart_upload, bucket, object_name,
+        d = retry(self.throttler.throttle,
+                  self.client.complete_multipart_upload, bucket, object_name,
                   upload_id, parts_list)
         d.addCallback(self._completed)
         d.addErrback(self._error)
