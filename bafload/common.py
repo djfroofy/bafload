@@ -4,6 +4,7 @@ from twisted.python import log as twisted_log
 
 from bafload.interfaces import ITransmissionCounter, ILog
 
+
 class ProgressLoggerMixin(object):
     log = twisted_log
 
@@ -17,7 +18,7 @@ class BaseCounter(ProgressLoggerMixin):
     implements(ITransmissionCounter)
 
     completed = 0
-    expected  = None
+    expected = None
     receiving = None
     context = ''
     format_for_stdout = True

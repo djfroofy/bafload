@@ -95,4 +95,3 @@ class ThroughputCounter(object):
 
     def read(self):
         return list(self.stats.slots)
-

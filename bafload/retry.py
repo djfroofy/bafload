@@ -52,14 +52,16 @@ class BinaryExponentialBackoff(object):
         if count == self.max_slots and self.fail_on_truncate:
             finished.errback(why)
             return
+
         def retry():
             d = f(*a, **kw)
             d.addCallback(finished.callback)
             if self.log_errors:
                 d.addErrback(self._log_error, f)
             d.addErrback(self._retry, finished, count + 1, f, a, kw)
+
         if count:
-            when = self.slot_duration * ((2**count) - 1) * self.scatter()
+            when = self.slot_duration * ((2 ** count) - 1) * self.scatter()
             self.clock.callLater(when, retry)
         else:
             retry()

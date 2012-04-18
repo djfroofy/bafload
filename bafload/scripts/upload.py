@@ -40,16 +40,16 @@ def show_stats(result, throughput_counter):
             for (i, (t, count)) in enumerate(reversed(table)) if count][0]
     index1 = throughput_counter.stats.size - index1
     elapsed = (tk - t0) + slot_dur
-    counts = [slot[1] for slot in table[index0:index1+1]]
+    counts = [slot[1] for slot in table[index0:index1 + 1]]
     tx = sum(counts)
     max_count = max(counts)
-    max_mbps = max_count / float(slot_dur) / (2**20)
-    min_mbps = min(counts) / float(slot_dur) / (2**20)
-    avg_mbps = tx / float(elapsed) / (2**20)
+    max_mbps = max_count / float(slot_dur) / (2 ** 20)
+    min_mbps = min(counts) / float(slot_dur) / (2 ** 20)
+    avg_mbps = tx / float(elapsed) / (2 ** 20)
     print 'Average Transfer: %3.3fMBs' % avg_mbps
     print 'Max: %3.3fMBs' % max_mbps
     print 'Min: %3.3fMBs' % min_mbps
-    print 'Total tx: %2.2fMB' % (tx / 2.0**20)
+    print 'Total tx: %2.2fMB' % (tx / 2.0 ** 20)
     return result
 
 
@@ -77,7 +77,7 @@ def start():
         object_name = os.path.basename(path)
         content_type = mimetypes.guess_type(path)[0]
         d = uploader.upload(fd, bucket, object_name, content_type=content_type,
-                            amz_headers={'acl':'public-read'})
+                            amz_headers={'acl': 'public-read'})
         finished.append(d)
     gatherResults(finished).addCallback(show_stats, throughput_counter
             ).addCallbacks(complete, log.err).addBoth(stop)

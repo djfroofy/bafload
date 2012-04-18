@@ -30,6 +30,7 @@ class IProgressLogger(Interface):
         Set logging component or provider of L{ILog}.
         """
 
+
 class ITransmissionCounter(IProgressLogger):
 
     completed = Attribute("Number of parts/chunks transfered (starts at 0)")
@@ -40,6 +41,7 @@ class ITransmissionCounter(IProgressLogger):
         """
         Count a part as completed, incrementing completed count.
         """
+
 
 class IPartsGenerator(IProgressLogger):
     """
@@ -107,6 +109,7 @@ class IMultipartUploadsManager(IProgressLogger):
             this method should use some default provider)
         """
 
+
 class IThrouputCounter(Interface):
     """
     An API for tracking average throughput.
@@ -118,10 +121,10 @@ class IThrouputCounter(Interface):
         """
 
     def stop_entity(id, size):
-       """
-       Mark current time as end of upload of entity C{id} where tranferred
-       bytes count is C{size}.
-       """
+        """
+        Mark current time as end of upload of entity C{id} where tranferred
+        bytes count is C{size}.
+        """
 
     def read():
         """
@@ -129,6 +132,7 @@ class IThrouputCounter(Interface):
 
         [(t_0, v_0), (t_1, v_1), ... (t_n, v_n)]
         """
+
 
 class IThrottler(Interface):
     """
@@ -156,6 +160,7 @@ class IFile(Interface):
     """
     Stub interface for file objects.
     """
+
 
 class IStringIO(Interface):
     """

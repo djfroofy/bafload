@@ -37,8 +37,10 @@ class PassThruThrottlerTestCase(TestCase):
         d = throttler.throttle(test_func, 'foo', a=1, b=2)
         self.assertEqual(test_func.called, [(('foo',), {'a': 1, 'b': 2})])
         d.callback('ok')
+
         def check(r):
             self.assertEqual(r, 'ok')
+
         return d.addCallback(check)
 
 
@@ -65,6 +67,8 @@ class MaxConcurrentThrottlerTestCase(TestCase):
         for d in list(test_func.finished):
             d.callback(1)
         self.failIf(throttler.pending)
+
         def check(r):
             self.assertEqual(r, [1, 1, 1, 1, 1])
+
         return finished.addCallback(check)

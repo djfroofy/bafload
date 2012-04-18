@@ -47,6 +47,7 @@ class SlidingStatsTestCase(TestCase):
         expected = zip(window, [0] * 99 + [7])
         self.assertEquals(list(stats.slots), expected)
 
+
 class ThroughputCounterTestCase(TestCase):
 
     def test_iface(self):
@@ -90,4 +91,3 @@ class ThroughputCounterTestCase(TestCase):
         expected = zip(window, [0] * 5 + [2] * 5 + [2.5] * 15 + [0.5] * 24
                                + [10.5])
         self.assertEquals(counter.read(), expected)
-

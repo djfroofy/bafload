@@ -47,7 +47,8 @@ class FakeS3Client(object):
                               metadata, amz_headers={}):
         self.calls.append(('init_multipart_upload', bucket, object_name,
             content_type, metadata, amz_headers))
-        return succeed(MultipartInitiationResponse(bucket, object_name, '1234'))
+        return succeed(MultipartInitiationResponse(bucket, object_name,
+                                                   '1234'))
 
     def upload_part(self, bucket, object_name, upload_id, part_number,
                     data=None, content_type=None, metadata={},
@@ -59,5 +60,3 @@ class FakeS3Client(object):
         return succeed(MultipartCompletionResponse(
             'http://%s.example.com/%s' % (bucket, object_name),
             bucket, object_name, '"0123456789"'))
-
-
