@@ -1,4 +1,4 @@
-Bafload - Big Ass File Uploader
+Bafload - A fast txAWS-based S3 uploader
 
 Bafload uses txAWS to support robust upload of large files to Amazon S3 using
 multipart upload support with retry logic for parts.
